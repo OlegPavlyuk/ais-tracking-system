@@ -7,7 +7,7 @@ Source spec: `docs/architecture-decisions.md` and `docs/prd.md`.
 
 ---
 
-## #1 — Walking skeleton
+## #1 — Walking skeleton ✅ (commit `ee1ed6d`)
 
 **Type:** HITL (foundation slice; review repo layout, module boundaries, config
 structure, Docker setup, shared infrastructure before continuing).
@@ -23,17 +23,17 @@ domain tables yet. Three endpoints live: `/healthz`, `/readyz`, `/metrics`.
 
 ### Acceptance criteria
 
-- [ ] `docker compose up` brings the full stack to ready in one command.
-- [ ] `GET /healthz` returns 200 if the process is alive.
-- [ ] `GET /readyz` returns 200 only when DB and Redis are reachable; 503 otherwise.
-- [ ] `GET /metrics` exposes a Prometheus-formatted endpoint.
-- [ ] `PROCESS_ROLE` env selects which Nest modules bootstrap; verified for at least `api` and `all`.
-- [ ] Repo structure matches the module map in `docs/architecture-decisions.md` (empty placeholders OK for not-yet-built modules).
-- [ ] `ConfigService` validates env via Zod and fails fast on invalid config.
-- [ ] `pino` structured logging emits JSON with correlation-field placeholders.
-- [ ] Drizzle migration tooling runs `npm run migrate` cleanly against the docker Postgres.
-- [ ] Prometheus scrapes `/metrics`; Grafana is reachable on its port (no dashboards yet).
-- [ ] Unit tests cover `ConfigService` (rejects invalid env, applies defaults) and `HealthService` (readyz reflects DB/Redis state).
+- [x] `docker compose up` brings the full stack to ready in one command.
+- [x] `GET /healthz` returns 200 if the process is alive.
+- [x] `GET /readyz` returns 200 only when DB and Redis are reachable; 503 otherwise.
+- [x] `GET /metrics` exposes a Prometheus-formatted endpoint.
+- [x] `PROCESS_ROLE` env selects which Nest modules bootstrap; verified for at least `api` and `all`.
+- [x] Repo structure matches the module map in `docs/architecture-decisions.md` (empty placeholders OK for not-yet-built modules).
+- [x] `ConfigService` validates env via Zod and fails fast on invalid config.
+- [x] `pino` structured logging emits JSON with correlation-field placeholders.
+- [x] Drizzle migration tooling runs `pnpm migrate` cleanly against the docker Postgres.
+- [x] Prometheus scrapes `/metrics`; Grafana is reachable on its port (no dashboards yet).
+- [x] Unit tests cover `ConfigService` (rejects invalid env, applies defaults) and `HealthService` (readyz reflects DB/Redis state).
 
 ### Blocked by
 
