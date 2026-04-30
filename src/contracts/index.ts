@@ -7,7 +7,7 @@ const Mmsi = z
   .transform((v) => String(v))
   .refine((s) => /^\d{9}$/.test(s), { message: 'mmsi must be a 9-digit string' });
 
-const PositionEventBase = z.object({
+export const PositionEventSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   kind: z.literal('position'),
   mmsi: Mmsi,
@@ -18,16 +18,36 @@ const PositionEventBase = z.object({
   trueHeading: z.number().int().gte(0).lte(511).nullable().optional(),
   navStatus: z.number().int().gte(0).lte(15).nullable().optional(),
   rateOfTurn: z.number().nullable().optional(),
-  shipName: z.string().nullable().optional(),
+  shipName: z.string().max(255).nullable().optional(),
   occurredAt: z.string().datetime({ offset: true }),
   provider: z.string().min(1),
   ingestedAt: z.string().datetime({ offset: true }),
 });
-
-export const PositionEventSchema = PositionEventBase;
 export type PositionEvent = z.infer<typeof PositionEventSchema>;
 
-export const CanonicalEventSchema = PositionEventSchema; // discriminated union grows in slice #3
+export const StaticEventSchema = z.object({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  kind: z.literal('static'),
+  mmsi: Mmsi,
+  imo: z.string().regex(/^\d{7}$/).nullable().optional(),
+  name: z.string().max(255).nullable().optional(),
+  callSign: z.string().max(32).nullable().optional(),
+  shipType: z.number().int().gte(0).lte(255).nullable().optional(),
+  dimensionToBow: z.number().int().nonnegative().nullable().optional(),
+  dimensionToStern: z.number().int().nonnegative().nullable().optional(),
+  dimensionToPort: z.number().int().nonnegative().nullable().optional(),
+  dimensionToStarboard: z.number().int().nonnegative().nullable().optional(),
+  destination: z.string().max(120).nullable().optional(),
+  occurredAt: z.string().datetime({ offset: true }),
+  provider: z.string().min(1),
+  ingestedAt: z.string().datetime({ offset: true }),
+});
+export type StaticEvent = z.infer<typeof StaticEventSchema>;
+
+export const CanonicalEventSchema = z.discriminatedUnion('kind', [
+  PositionEventSchema,
+  StaticEventSchema,
+]);
 export type CanonicalEvent = z.infer<typeof CanonicalEventSchema>;
 
 /** Raw provider message envelope handed from connector → filter → normalizer. */

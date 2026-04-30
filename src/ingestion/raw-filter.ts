@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 
+// ExtendedClassBPositionReport (Type 19) is observed in fixtures but intentionally
+// deferred: it is a hybrid (position + Name/ShipType/Dimension) and not yet
+// declared in docs/architecture-decisions.md. Decide its mapping before adding.
 export const VESSEL_MESSAGE_TYPES = new Set<string>([
   'PositionReport',
   'StandardClassBPositionReport',
   'StaticDataReport',
+  'ShipStaticData',
 ]);
 
 interface AisStreamLike {

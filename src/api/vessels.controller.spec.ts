@@ -1,10 +1,13 @@
 import { VesselsController } from './vessels.controller';
-import { VesselsRepository } from '../storage/vessels.repository';
+import { VesselDetailRow, VesselsRepository } from '../storage/vessels.repository';
 import { ApiError } from '../shared/errors/api-error';
 
 describe('VesselsController', () => {
   function makeController() {
-    const repo = { findInBbox: jest.fn().mockResolvedValue([]) } as unknown as VesselsRepository;
+    const repo = {
+      findInBbox: jest.fn().mockResolvedValue([]),
+      findById: jest.fn().mockResolvedValue(null),
+    } as unknown as VesselsRepository;
     return { controller: new VesselsController(repo), repo };
   }
 
@@ -32,6 +35,70 @@ describe('VesselsController', () => {
     await expect(controller.list({ bbox: 'nope' })).rejects.toBeInstanceOf(ApiError);
     await expect(controller.list({ bbox: '42,47,28,41' })).rejects.toMatchObject({
       response: { error: { code: 'INVALID_QUERY' } },
+    });
+  });
+
+  describe('GET /api/vessels/:id', () => {
+    const validId = '11111111-2222-3333-4444-555555555555';
+
+    function detailRow(overrides: Partial<VesselDetailRow> = {}): VesselDetailRow {
+      return {
+        id: validId,
+        mmsi: '210098000',
+        imo: '9807322',
+        name: 'STENA EMBLA',
+        callSign: '5BQA5',
+        shipType: 61,
+        destination: 'BELFAST<>BIRKINHEAD',
+        dimensionToBow: 55,
+        dimensionToStern: 160,
+        dimensionToPort: 3,
+        dimensionToStarboard: 25,
+        position: {
+          lon: 41.5,
+          lat: 41.5,
+          sog: 0.1,
+          cog: 26.9,
+          trueHeading: 261,
+          navStatus: 5,
+          rateOfTurn: 0,
+          occurredAt: '2026-04-30T06:29:19.087Z',
+          lastSeenAt: '2026-04-30T06:30:00.000Z',
+        },
+        ...overrides,
+      };
+    }
+
+    it('returns full profile with sanctions placeholders', async () => {
+      const { controller, repo } = makeController();
+      (repo.findById as jest.Mock).mockResolvedValue(detailRow());
+      const res = await controller.detail(validId);
+      expect(repo.findById).toHaveBeenCalledWith(validId);
+      expect(res).toMatchObject({
+        id: validId,
+        mmsi: '210098000',
+        name: 'STENA EMBLA',
+        sanctionsStatus: null,
+        sanctionsCheckedAt: null,
+        sanctionsMatches: [],
+      });
+      expect(res.position).not.toBeNull();
+    });
+
+    it('returns 404 envelope when vessel id is unknown', async () => {
+      const { controller } = makeController();
+      await expect(controller.detail(validId)).rejects.toMatchObject({
+        response: { error: { code: 'VESSEL_NOT_FOUND' } },
+        status: 404,
+      });
+    });
+
+    it('rejects non-UUID id with INVALID_QUERY', async () => {
+      const { controller } = makeController();
+      await expect(controller.detail('210098000')).rejects.toMatchObject({
+        response: { error: { code: 'INVALID_QUERY' } },
+        status: 400,
+      });
     });
   });
 });

@@ -1,8 +1,20 @@
-import { Controller, Get, HttpStatus, Inject, Query } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Inject, Param, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { VesselsRepository, VesselSnapshotRow } from '../storage/vessels.repository';
+import {
+  VesselDetailRow,
+  VesselsRepository,
+  VesselSnapshotRow,
+} from '../storage/vessels.repository';
 import { ApiError } from '../shared/errors/api-error';
 import { BLACK_SEA_BBOX, Bbox, bboxContains } from '../shared/config/constants';
+
+const UuidParam = z.string().uuid();
+
+export interface VesselDetailResponse extends VesselDetailRow {
+  sanctionsStatus: null;
+  sanctionsCheckedAt: null;
+  sanctionsMatches: [];
+}
 
 const BboxQuery = z.object({
   bbox: z
@@ -46,5 +58,23 @@ export class VesselsController {
     }
     const vessels = await this.repo.findInBbox(bbox, staleMinutes * 60 * 1000, limit);
     return { vessels };
+  }
+
+  @Get(':id')
+  async detail(@Param('id') id: string): Promise<VesselDetailResponse> {
+    const parsed = UuidParam.safeParse(id);
+    if (!parsed.success) {
+      throw new ApiError('INVALID_QUERY', 'id must be a UUID', HttpStatus.BAD_REQUEST);
+    }
+    const row = await this.repo.findById(parsed.data);
+    if (!row) {
+      throw new ApiError('VESSEL_NOT_FOUND', `vessel ${parsed.data} not found`, HttpStatus.NOT_FOUND);
+    }
+    return {
+      ...row,
+      sanctionsStatus: null,
+      sanctionsCheckedAt: null,
+      sanctionsMatches: [],
+    };
   }
 }
