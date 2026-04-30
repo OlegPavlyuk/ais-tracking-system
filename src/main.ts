@@ -1,4 +1,8 @@
 import 'reflect-metadata';
+import { loadEnvFileForLocalDevelopment } from './shared/config/load-env';
+
+loadEnvFileForLocalDevelopment();
+
 import { NestFactory } from '@nestjs/core';
 import { Logger as NestLogger } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
