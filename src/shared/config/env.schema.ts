@@ -24,6 +24,12 @@ export const EnvSchema = z.object({
     .string()
     .default('true')
     .transform((s) => s.toLowerCase() === 'true'),
+
+  DEDUP_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  SAMPLER_MOVING_WINDOW_SECONDS: z.coerce.number().int().positive().default(10),
+  SAMPLER_STATIONARY_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  SAMPLER_STATIONARY_SOG_KN: z.coerce.number().nonnegative().default(0.5),
+  SAMPLER_STATE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -19,7 +19,7 @@ describe('RawFilter', () => {
       Message: { PositionReport: { UserID: 241935000 } },
       MetaData: { MMSI: 241935000 },
     };
-    expect(filter.accept(msg)).toBe(true);
+    expect(filter.accept(msg)).toEqual({ accepted: true });
   });
 
   it('accepts StandardClassBPositionReport with 9-digit MMSI', () => {
@@ -28,7 +28,7 @@ describe('RawFilter', () => {
       Message: { StandardClassBPositionReport: { UserID: 213049000 } },
       MetaData: { MMSI: 213049000 },
     };
-    expect(filter.accept(msg)).toBe(true);
+    expect(filter.accept(msg)).toEqual({ accepted: true });
   });
 
   it('rejects BaseStationReport (non-vessel)', () => {
@@ -37,7 +37,7 @@ describe('RawFilter', () => {
       Message: { BaseStationReport: { UserID: 2130100 } },
       MetaData: { MMSI: 2130100 },
     };
-    expect(filter.accept(msg)).toBe(false);
+    expect(filter.accept(msg)).toEqual({ accepted: false, reason: 'non_vessel_mmsi' });
   });
 
   it('accepts ShipStaticData with 9-digit MMSI', () => {
@@ -46,7 +46,7 @@ describe('RawFilter', () => {
       Message: { ShipStaticData: { UserID: 210098000 } },
       MetaData: { MMSI: 210098000 },
     };
-    expect(filter.accept(msg)).toBe(true);
+    expect(filter.accept(msg)).toEqual({ accepted: true });
   });
 
   it('rejects ExtendedClassBPositionReport (Type 19, intentionally deferred)', () => {
@@ -55,7 +55,7 @@ describe('RawFilter', () => {
       Message: { ExtendedClassBPositionReport: { UserID: 257786070 } },
       MetaData: { MMSI: 257786070 },
     };
-    expect(filter.accept(msg)).toBe(false);
+    expect(filter.accept(msg)).toEqual({ accepted: false, reason: 'non_vessel_mmsi' });
   });
 
   it('rejects DataLinkManagementMessage', () => {
@@ -64,7 +64,7 @@ describe('RawFilter', () => {
       Message: { DataLinkManagementMessage: {} },
       MetaData: { MMSI: 2130201 },
     };
-    expect(filter.accept(msg)).toBe(false);
+    expect(filter.accept(msg)).toEqual({ accepted: false, reason: 'non_vessel_mmsi' });
   });
 
   it('rejects messages with non-9-digit MMSI', () => {
@@ -73,16 +73,24 @@ describe('RawFilter', () => {
       Message: { PositionReport: { UserID: 2130100 } },
       MetaData: { MMSI: 2130100 },
     };
-    expect(filter.accept(msg)).toBe(false);
+    expect(filter.accept(msg)).toEqual({ accepted: false, reason: 'non_vessel_mmsi' });
   });
 
   it('rejects messages without MessageType', () => {
-    expect(filter.accept({ MetaData: { MMSI: 241935000 } })).toBe(false);
+    expect(filter.accept({ MetaData: { MMSI: 241935000 } })).toEqual({
+      accepted: false,
+      reason: 'non_vessel_mmsi',
+    });
+  });
+
+  it('rejects null/non-object inputs as invalid', () => {
+    expect(filter.accept(null)).toEqual({ accepted: false, reason: 'invalid' });
+    expect(filter.accept(42)).toEqual({ accepted: false, reason: 'invalid' });
   });
 
   it('classifies fixture file: only Position* with 9-digit MMSI pass', () => {
     const fixture = loadFixture();
-    const accepted = fixture.filter((m) => filter.accept(m));
+    const accepted = fixture.filter((m) => filter.accept(m).accepted);
     for (const m of accepted) {
       const mt = (m as { MessageType?: string }).MessageType;
       expect([

@@ -76,7 +76,7 @@ so all consumers see a clean, consistent feed.
 - **Bypass**: a position event always passes through if `navStatus` changed,
   even inside the sampling window.
 - Static events are **never** sampled.
-- Drop reasons exposed as metric: `events_dropped_total{reason="duplicate"|"sampled"|"out_of_bbox"|"non_vessel_mmsi"|"invalid"}`.
+- Drop reasons exposed as metric: `ais_messages_dropped_total{reason="duplicate"|"sampled"|"out_of_bbox"|"non_vessel_mmsi"|"invalid"}`. `out_of_bbox` is reserved for a future in-process bbox check; today the provider subscription enforces the bbox upstream.
 
 ## Storage
 
