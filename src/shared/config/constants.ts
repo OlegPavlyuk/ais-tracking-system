@@ -1,7 +1,7 @@
 /**
  * Black Sea bbox — single source of truth for both the AISStream subscription
  * and the public `BBOX_OUT_OF_SCOPE` boundary check. Coordinates match the
- * reference fixture in `aisstream/index.js`.
+ * captured fixture in `aisstream/raw-api-response.jsonl`.
  */
 export const BLACK_SEA_BBOX = {
   minLon: 27.0,
