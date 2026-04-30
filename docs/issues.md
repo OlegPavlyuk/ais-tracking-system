@@ -55,16 +55,16 @@ No dedup/sampling, no transaction guarantees yet, no static events.
 
 ### Acceptance criteria
 
-- [ ] AISStream adapter connects, subscribes to Black Sea bbox, and forwards `RawProviderMessage` events.
-- [ ] `RawFilter` accepts only 9-digit vessel MMSIs and rejects base-station / non-vessel message types.
-- [ ] `Normalizer` produces canonical `position` events with `schemaVersion`, validated via Zod.
-- [ ] `EventBus` publishes events to `ais.events.v1` (Redis Streams).
-- [ ] `StorageWriterConsumer` consumer-group worker INSERTs/UPSERTs into `vessels` and `vessel_positions_latest`.
-- [ ] `vessels` schema has UUID PK, indexed `mmsi` unique and `imo` nullable; `vessel_positions_latest` has `position geometry(Point, 4326)` with GIST index, plus `last_seen_at`.
-- [ ] `GET /api/vessels?bbox=minLon,minLat,maxLon,maxLat` returns vessels in the bbox, joined to profile fields, filtered by `last_seen_at`.
-- [ ] Out-of-Black-Sea bbox returns `BBOX_OUT_OF_SCOPE` error envelope.
-- [ ] Live AIS data is queryable via curl within seconds of stream start.
-- [ ] Unit tests cover `RawFilter` and `Normalizer` against fixture data in `aisstream/`.
+- [x] AISStream adapter connects, subscribes to Black Sea bbox, and forwards `RawProviderMessage` events.
+- [x] `RawFilter` accepts only 9-digit vessel MMSIs and rejects base-station / non-vessel message types.
+- [x] `Normalizer` produces canonical `position` events with `schemaVersion`, validated via Zod.
+- [x] `EventBus` publishes events to `ais.events.v1` (Redis Streams).
+- [x] `StorageWriterConsumer` consumer-group worker INSERTs/UPSERTs into `vessels` and `vessel_positions_latest`.
+- [x] `vessels` schema has UUID PK, indexed `mmsi` unique and `imo` nullable; `vessel_positions_latest` has `position geometry(Point, 4326)` with GIST index, plus `last_seen_at`.
+- [x] `GET /api/vessels?bbox=minLon,minLat,maxLon,maxLat` returns vessels in the bbox, joined to profile fields, filtered by `last_seen_at`.
+- [x] Out-of-Black-Sea bbox returns `BBOX_OUT_OF_SCOPE` error envelope.
+- [x] Live AIS data is queryable via curl within seconds of stream start.
+- [x] Unit tests cover `RawFilter` and `Normalizer` against fixture data in `aisstream/`.
 
 ### Blocked by
 
