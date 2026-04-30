@@ -84,12 +84,12 @@ callsign, ship type, dimensions, destination) on `vessels`. Expose
 
 ### Acceptance criteria
 
-- [ ] `Normalizer` produces canonical `static` events from `StaticDataReport` and `ShipStaticData`.
-- [ ] Static events flow on the same `ais.events.v1` stream, discriminated by `kind`.
-- [ ] `StorageWriterConsumer` upserts profile fields onto `vessels` from static events.
-- [ ] `GET /api/vessels/:id` returns full profile + current position + sanctions placeholder fields.
-- [ ] 404 envelope returned when ID not found.
-- [ ] Unit tests for static-event normalization against fixture data.
+- [x] `Normalizer` produces canonical `static` events from `StaticDataReport` and `ShipStaticData`.
+- [x] Static events flow on the same `ais.events.v1` stream, discriminated by `kind`.
+- [x] `StorageWriterConsumer` upserts profile fields onto `vessels` from static events.
+- [x] `GET /api/vessels/:id` returns full profile + current position + sanctions placeholder fields.
+- [x] 404 envelope returned when ID not found.
+- [x] Unit tests for static-event normalization against fixture data.
 - [ ] Integration test: replay fixture file, assert both `vessels` profile fields and `vessel_positions_latest` are populated correctly.
 
 ### Blocked by
