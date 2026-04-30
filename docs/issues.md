@@ -98,7 +98,7 @@ callsign, ship type, dimensions, destination) on `vessels`. Expose
 
 ---
 
-## #4 — Dedup, sampling, drop metrics
+## #4 — Dedup, sampling, drop metrics ✅ (commit `7c0138f`)
 
 **Type:** AFK
 
@@ -111,11 +111,11 @@ Drop counters exposed as metrics with reason labels.
 
 ### Acceptance criteria
 
-- [ ] `DedupService.shouldAccept(mmsi, occurredAt)` uses Redis last-seen state with ~10 minute TTL.
-- [ ] `SamplerService.shouldEmit(...)` returns true on navStatus change regardless of window.
-- [ ] Static events are never sampled.
-- [ ] `events_dropped_total{reason="duplicate"|"sampled"|"out_of_bbox"|"non_vessel_mmsi"|"invalid"}` metric incremented per drop.
-- [ ] Unit tests cover dedup TTL, sampler windows (moving + stationary), navStatus bypass, static passthrough.
+- [x] `DedupService.shouldAccept(mmsi, occurredAt)` uses Redis last-seen state with ~10 minute TTL.
+- [x] `SamplerService.shouldEmit(...)` returns true on navStatus change regardless of window.
+- [x] Static events are never sampled.
+- [x] `ais_messages_dropped_total{reason="duplicate"|"sampled"|"out_of_bbox"|"non_vessel_mmsi"|"invalid"}` metric incremented per drop.
+- [x] Unit tests cover dedup TTL, sampler windows (moving + stationary), navStatus bypass, static passthrough.
 - [ ] Integration test: replay fixture stream with duplicates; assert exactly the expected canonical events appear and drop counters match.
 
 ### Blocked by
