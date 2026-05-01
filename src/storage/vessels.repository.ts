@@ -21,6 +21,19 @@ export interface VesselSnapshotRow {
   lastSeenAt: string;
 }
 
+export interface TrackPoint {
+  lon: number;
+  lat: number;
+  occurredAt: string;
+  sog: number | null;
+  cog: number | null;
+  navStatus: number | null;
+}
+
+export type TrackResult =
+  | { kind: 'points'; points: TrackPoint[] }
+  | { kind: 'linestring'; coordinates: [number, number][] };
+
 export interface VesselDetailRow {
   id: string;
   mmsi: string;
@@ -51,8 +64,10 @@ export class VesselsRepository {
   constructor(@Inject(DbService) private readonly dbs: DbService) {}
 
   /**
-   * Upserts the vessel row (creating on first sight) and the latest position
-   * row in a single transaction. History writes land in slice #5.
+   * Single transaction: upsert `vessels` (creating on first sight), upsert
+   * `vessel_positions_latest`, append to `vessel_positions_history`. The
+   * history insert is guarded by `(vessel_id, occurred_at)` uniqueness so a
+   * stream replay is a no-op rather than a duplicate row.
    */
   async upsertPosition(event: PositionEvent): Promise<void> {
     const db = this.dbs.db;
@@ -95,7 +110,86 @@ export class VesselsRepository {
               last_seen_at = NOW()
           WHERE vessel_positions_latest.occurred_at <= EXCLUDED.occurred_at
       `);
+
+      await tx.execute(sql`
+        INSERT INTO vessel_positions_history (
+          vessel_id, mmsi, position, sog, cog, true_heading, nav_status, rate_of_turn, occurred_at
+        )
+        VALUES (
+          ${row.id},
+          ${event.mmsi},
+          ST_SetSRID(ST_MakePoint(${event.lon}, ${event.lat}), 4326),
+          ${event.sog ?? null},
+          ${event.cog ?? null},
+          ${event.trueHeading ?? null},
+          ${event.navStatus ?? null},
+          ${event.rateOfTurn ?? null},
+          ${event.occurredAt}
+        )
+        ON CONFLICT (vessel_id, occurred_at) DO NOTHING
+      `);
     });
+  }
+
+  async findTrack(
+    vesselId: string,
+    from: Date,
+    to: Date,
+    simplifyMeters?: number,
+  ): Promise<TrackResult> {
+    if (simplifyMeters !== undefined) {
+      const rows = await this.dbs.db.execute(sql`
+        SELECT ST_AsGeoJSON(
+          ST_Transform(
+            ST_SimplifyPreserveTopology(
+              ST_Transform(ST_MakeLine(position ORDER BY occurred_at ASC), 3857),
+              ${simplifyMeters}
+            ),
+            4326
+          )
+        )::text AS geojson
+        FROM vessel_positions_history
+        WHERE vessel_id = ${vesselId}
+          AND occurred_at >= ${from.toISOString()}
+          AND occurred_at <  ${to.toISOString()}
+        HAVING COUNT(*) >= 2
+      `);
+      const row = (rows as unknown as Array<{ geojson: string | null }>)[0];
+      if (!row || !row.geojson) {
+        return { kind: 'linestring', coordinates: [] };
+      }
+      try {
+        const geom = JSON.parse(row.geojson) as { coordinates?: unknown };
+        const coords = Array.isArray(geom.coordinates) ? (geom.coordinates as [number, number][]) : [];
+        return { kind: 'linestring', coordinates: coords };
+      } catch {
+        return { kind: 'linestring', coordinates: [] };
+      }
+    }
+
+    const rows = await this.dbs.db.execute(sql`
+      SELECT
+        ST_X(position::geometry) AS lon,
+        ST_Y(position::geometry) AS lat,
+        sog,
+        cog,
+        nav_status   AS "navStatus",
+        occurred_at  AS "occurredAt"
+      FROM vessel_positions_history
+      WHERE vessel_id = ${vesselId}
+        AND occurred_at >= ${from.toISOString()}
+        AND occurred_at <  ${to.toISOString()}
+      ORDER BY occurred_at ASC
+    `);
+    const points = (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      lon: r.lon as number,
+      lat: r.lat as number,
+      occurredAt: (r.occurredAt instanceof Date ? r.occurredAt.toISOString() : (r.occurredAt as string)),
+      sog: r.sog as number | null,
+      cog: r.cog as number | null,
+      navStatus: r.navStatus as number | null,
+    }));
+    return { kind: 'points', points };
   }
 
   /**

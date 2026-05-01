@@ -7,6 +7,7 @@ describe('VesselsController', () => {
     const repo = {
       findInBbox: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue(null),
+      findTrack: jest.fn().mockResolvedValue({ kind: 'points', points: [] }),
     } as unknown as VesselsRepository;
     return { controller: new VesselsController(repo), repo };
   }
@@ -96,6 +97,95 @@ describe('VesselsController', () => {
     it('rejects non-UUID id with INVALID_QUERY', async () => {
       const { controller } = makeController();
       await expect(controller.detail('210098000')).rejects.toMatchObject({
+        response: { error: { code: 'INVALID_QUERY' } },
+        status: 400,
+      });
+    });
+  });
+
+  describe('GET /api/vessels/:id/track', () => {
+    const validId = '11111111-2222-3333-4444-555555555555';
+    const from = '2026-04-23T00:00:00.000Z';
+    const to = '2026-04-30T00:00:00.000Z';
+
+    it('returns points when simplify is omitted', async () => {
+      const { controller, repo } = makeController();
+      (repo.findTrack as jest.Mock).mockResolvedValue({
+        kind: 'points',
+        points: [{ lon: 41.5, lat: 41.5, occurredAt: from, sog: 0.1, cog: 26.9, navStatus: 5 }],
+      });
+      const res = await controller.track(validId, { from, to });
+      expect(repo.findTrack).toHaveBeenCalledWith(validId, new Date(from), new Date(to), undefined);
+      expect(res).toEqual({
+        vesselId: validId,
+        from,
+        to,
+        points: [{ lon: 41.5, lat: 41.5, occurredAt: from, sog: 0.1, cog: 26.9, navStatus: 5 }],
+      });
+    });
+
+    it('returns GeoJSON LineString when simplify is provided', async () => {
+      const { controller, repo } = makeController();
+      (repo.findTrack as jest.Mock).mockResolvedValue({
+        kind: 'linestring',
+        coordinates: [
+          [41.5, 41.5],
+          [41.6, 41.7],
+        ],
+      });
+      const res = await controller.track(validId, { from, to, simplify: '500' });
+      expect(repo.findTrack).toHaveBeenCalledWith(validId, new Date(from), new Date(to), 500);
+      expect(res).toEqual({
+        vesselId: validId,
+        from,
+        to,
+        simplifyMeters: 500,
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [41.5, 41.5],
+            [41.6, 41.7],
+          ],
+        },
+      });
+    });
+
+    it('rejects from >= to with INVALID_QUERY', async () => {
+      const { controller } = makeController();
+      await expect(controller.track(validId, { from: to, to: from })).rejects.toMatchObject({
+        response: { error: { code: 'INVALID_QUERY' } },
+        status: 400,
+      });
+    });
+
+    it('rejects window > 7 days with INVALID_QUERY', async () => {
+      const { controller } = makeController();
+      const wide = '2026-05-01T00:00:01.000Z';
+      await expect(controller.track(validId, { from, to: wide })).rejects.toMatchObject({
+        response: { error: { code: 'INVALID_QUERY' } },
+        status: 400,
+      });
+    });
+
+    it('rejects non-UUID id with INVALID_QUERY', async () => {
+      const { controller } = makeController();
+      await expect(controller.track('not-a-uuid', { from, to })).rejects.toMatchObject({
+        response: { error: { code: 'INVALID_QUERY' } },
+        status: 400,
+      });
+    });
+
+    it('rejects non-positive simplify with INVALID_QUERY', async () => {
+      const { controller } = makeController();
+      await expect(controller.track(validId, { from, to, simplify: '0' })).rejects.toMatchObject({
+        response: { error: { code: 'INVALID_QUERY' } },
+        status: 400,
+      });
+    });
+
+    it('rejects malformed from/to with INVALID_QUERY', async () => {
+      const { controller } = makeController();
+      await expect(controller.track(validId, { from: 'not-a-date', to })).rejects.toMatchObject({
         response: { error: { code: 'INVALID_QUERY' } },
         status: 400,
       });

@@ -23,7 +23,8 @@
     "test:cov": "jest --coverage",
     "migrate": "drizzle-kit migrate",
     "migrate:generate": "drizzle-kit generate",
-    "migrate:check": "drizzle-kit check"
+    "migrate:check": "drizzle-kit check",
+    "partition:create": "ts-node scripts/create-partition.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

@@ -1,0 +1,278 @@
+{
+  "id": "00000002-0000-0000-0000-000000000002",
+  "prevId": "93d257af-6aea-46f3-b6f3-2827f8fb5edc",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.vessel_positions_latest": {
+      "name": "vessel_positions_latest",
+      "schema": "",
+      "columns": {
+        "vessel_id": {
+          "name": "vessel_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "mmsi": {
+          "name": "mmsi",
+          "type": "varchar(9)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "geometry(point)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sog": {
+          "name": "sog",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cog": {
+          "name": "cog",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "true_heading": {
+          "name": "true_heading",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nav_status": {
+          "name": "nav_status",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate_of_turn": {
+          "name": "rate_of_turn",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "vessel_positions_latest_position_gist": {
+          "name": "vessel_positions_latest_position_gist",
+          "columns": [
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gist",
+          "with": {}
+        },
+        "vessel_positions_latest_last_seen_idx": {
+          "name": "vessel_positions_latest_last_seen_idx",
+          "columns": [
+            {
+              "expression": "last_seen_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "vessel_positions_latest_mmsi_idx": {
+          "name": "vessel_positions_latest_mmsi_idx",
+          "columns": [
+            {
+              "expression": "mmsi",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "vessel_positions_latest_vessel_id_vessels_id_fk": {
+          "name": "vessel_positions_latest_vessel_id_vessels_id_fk",
+          "tableFrom": "vessel_positions_latest",
+          "tableTo": "vessels",
+          "columnsFrom": [
+            "vessel_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.vessels": {
+      "name": "vessels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "mmsi": {
+          "name": "mmsi",
+          "type": "varchar(9)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imo": {
+          "name": "imo",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "call_sign": {
+          "name": "call_sign",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ship_type": {
+          "name": "ship_type",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "destination": {
+          "name": "destination",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dimension_to_bow": {
+          "name": "dimension_to_bow",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dimension_to_stern": {
+          "name": "dimension_to_stern",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dimension_to_port": {
+          "name": "dimension_to_port",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dimension_to_starboard": {
+          "name": "dimension_to_starboard",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "vessels_mmsi_unique": {
+          "name": "vessels_mmsi_unique",
+          "columns": [
+            {
+              "expression": "mmsi",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "vessels_imo_idx": {
+          "name": "vessels_imo_idx",
+          "columns": [
+            {
+              "expression": "imo",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
