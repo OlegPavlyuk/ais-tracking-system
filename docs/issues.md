@@ -164,15 +164,15 @@ on overflow, 30-second heartbeat.
 
 ### Acceptance criteria
 
-- [ ] `RealtimeGateway` accepts `subscribe` and `update_subscription` messages.
-- [ ] `SubscriptionService` holds in-memory `connectionId → bbox` map.
-- [ ] `FanoutConsumer` consumer-group worker for `ais.events.v1` filters and routes to matching connections.
-- [ ] Server emits `position`, `static`, `vessel.enriched`, and `error` typed messages.
-- [ ] Per-connection bounded queue (configurable) with drop-oldest-position-per-vessel under overflow; static and enriched events never dropped.
-- [ ] 30s heartbeat ping; non-responsive clients disconnected.
-- [ ] Standard `{ error: { code, message, details } }` envelope on WS errors.
-- [ ] Integration test: two `wscat`-style clients with overlapping bboxes; assert each receives only events in its viewport.
-- [ ] Integration test: slow client's queue overflows; oldest position-per-vessel dropped while other client continues unaffected.
+- [x] `RealtimeGateway` accepts `subscribe` and `update_subscription` messages.
+- [x] `SubscriptionService` holds in-memory `connectionId → bbox` map.
+- [x] `FanoutConsumer` consumer-group worker for `ais.events.v1` filters and routes to matching connections.
+- [x] Server emits `position`, `static`, `vessel.enriched`, and `error` typed messages. (`vessel.enriched` slot defined; not emitted until slice #8.)
+- [x] Per-connection bounded queue (configurable) with drop-oldest-position-per-vessel under overflow; static and enriched events never dropped.
+- [x] 30s heartbeat ping; non-responsive clients disconnected.
+- [x] Standard `{ error: { code, message, details } }` envelope on WS errors.
+- [ ] Integration test: two `wscat`-style clients with overlapping bboxes; assert each receives only events in its viewport. (Deferred until integration harness lands.)
+- [ ] Integration test: slow client's queue overflows; oldest position-per-vessel dropped while other client continues unaffected. (Deferred until integration harness lands.)
 
 ### Blocked by
 
