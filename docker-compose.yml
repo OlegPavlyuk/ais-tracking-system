@@ -34,6 +34,7 @@ services:
       retries: 10
 
   app:
+    profiles: ["full"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -66,7 +67,9 @@ services:
     ports:
       - "9090:9090"
     depends_on:
-      - app
+      app:
+        condition: service_started
+        required: false
 
   grafana:
     image: grafana/grafana:11.3.1
