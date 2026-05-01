@@ -193,15 +193,15 @@ metadata.
 
 ### Acceptance criteria
 
-- [ ] `SanctionsSourceAdapter` interface defined with `fetch()` / `parseVessel(raw)`.
-- [ ] `OfacAdapter` implements it; downloads consolidated XML; parses; extracts only vessel entities.
-- [ ] `sanctioned_entities` table with `(source, source_entity_id)` unique; indexed `imo`, `mmsi`, `name`; `aliases` text[] with GIN; raw_payload JSONB.
-- [ ] `sanctions_import_runs` records each run with timing, counts, errors.
-- [ ] `sanctions.import` BullMQ queue; daily scheduled job per source.
-- [ ] Re-running the import is idempotent (no duplicate rows).
-- [ ] `GET /api/sanctions/sources` returns sources with last-import summary and attribution metadata.
-- [ ] Unit tests for `OfacAdapter` parsing against fixture XML.
-- [ ] Integration test: ingest fixture OFAC file, assert `sanctioned_entities` populated and `sanctions_import_runs` row recorded; second run is a no-op.
+- [x] `SanctionsSourceAdapter` interface defined as `fetchAll(): AsyncIterable<VesselEntity>` (adapter owns transport + parsing + vessel filtering; importer owns batched upserts and run-record bookkeeping).
+- [x] `OfacAdapter` implements it; downloads consolidated XML; parses with `fast-xml-parser`; extracts only `sdnType === 'Vessel'` entries; normalizes IMO ("IMO 9187629" and bare-digit forms), MMSI, and strong-category aliases.
+- [x] `sanctioned_entities` table with `(source, source_entity_id)` unique; indexed `imo`, `mmsi`, `name`; `aliases` text[] with GIN; raw_payload JSONB. Strong-only aliases live in the structured column; weak aliases preserved in `raw_payload`.
+- [x] `sanctions_import_runs` records each run with timing, counts, errors.
+- [x] `sanctions.import` BullMQ queue (`@nestjs/bullmq`); daily scheduled job per source via `SanctionsScheduler`.
+- [x] Re-running the import is idempotent: `INSERT ... ON CONFLICT (source, source_entity_id) DO UPDATE` keeps row count stable across re-runs.
+- [x] `GET /api/sanctions/sources` returns sources with last-import summary and attribution metadata.
+- [x] Unit tests for `OfacAdapter` parsing against fixture XML.
+- [ ] Integration test: ingest fixture OFAC file, assert `sanctioned_entities` populated and `sanctions_import_runs` row recorded; second run is a no-op. (Deferred until integration harness lands.)
 
 ### Blocked by
 
