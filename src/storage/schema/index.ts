@@ -8,6 +8,11 @@ import {
   smallint,
   doublePrecision,
   geometry,
+  text,
+  jsonb,
+  bigserial,
+  integer,
+  date,
 } from 'drizzle-orm/pg-core';
 
 export const vessels = pgTable(
@@ -59,3 +64,47 @@ export const vesselPositionsLatest = pgTable(
 export type Vessel = typeof vessels.$inferSelect;
 export type NewVessel = typeof vessels.$inferInsert;
 export type VesselPositionLatest = typeof vesselPositionsLatest.$inferSelect;
+
+export const sanctionedEntities = pgTable(
+  'sanctioned_entities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    source: varchar('source', { length: 32 }).notNull(),
+    sourceEntityId: varchar('source_entity_id', { length: 64 }).notNull(),
+    name: varchar('name', { length: 512 }).notNull(),
+    imo: varchar('imo', { length: 16 }),
+    mmsi: varchar('mmsi', { length: 9 }),
+    aliases: text('aliases').array().notNull().default([]),
+    flag: varchar('flag', { length: 128 }),
+    listingDate: date('listing_date'),
+    programs: text('programs').array().notNull().default([]),
+    rawPayload: jsonb('raw_payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('sanctioned_entities_source_entity_uniq').on(t.source, t.sourceEntityId),
+    index('sanctioned_entities_imo_idx').on(t.imo),
+    index('sanctioned_entities_mmsi_idx').on(t.mmsi),
+    index('sanctioned_entities_name_idx').on(t.name),
+    index('sanctioned_entities_aliases_gin').using('gin', t.aliases),
+  ],
+);
+
+export const sanctionsImportRuns = pgTable(
+  'sanctions_import_runs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    source: varchar('source', { length: 32 }).notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    status: varchar('status', { length: 16 }).notNull(),
+    recordsImported: integer('records_imported').notNull().default(0),
+    errors: jsonb('errors').notNull().default([]),
+  },
+  (t) => [index('sanctions_import_runs_source_started_idx').on(t.source, t.startedAt)],
+);
+
+export type SanctionedEntity = typeof sanctionedEntities.$inferSelect;
+export type NewSanctionedEntity = typeof sanctionedEntities.$inferInsert;
+export type SanctionsImportRun = typeof sanctionsImportRuns.$inferSelect;

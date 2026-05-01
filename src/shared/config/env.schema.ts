@@ -34,6 +34,14 @@ export const EnvSchema = z.object({
   WS_SEND_QUEUE_MAX: z.coerce.number().int().positive().default(256),
   WS_BUFFERED_AMOUNT_LIMIT_BYTES: z.coerce.number().int().positive().default(1024 * 1024),
   WS_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
+
+  OFAC_SDN_URL: z
+    .string()
+    .url()
+    .default('https://sanctionslistservice.ofac.treas.gov/api/download/SDN.XML'),
+  OFAC_SDN_FIXTURE_PATH: z.string().optional(),
+  SANCTIONS_IMPORT_CRON: z.string().default('0 3 * * *'),
+  SANCTIONS_IMPORT_BATCH_SIZE: z.coerce.number().int().positive().default(500),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

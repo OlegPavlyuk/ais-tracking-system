@@ -1,0 +1,306 @@
+<?xml version="1.0" standalone="yes"?>
+<sdnList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation>
+    <Publish_Date>04/30/2026</Publish_Date>
+    <Record_Count>18899</Record_Count>
+  </publshInformation>
+  <sdnEntry>
+    <uid>36</uid>
+    <lastName>AEROCARIBBEAN AIRLINES</lastName>
+    <sdnType>Entity</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <akaList>
+      <aka>
+        <uid>12</uid>
+        <type>a.k.a.</type>
+        <category>strong</category>
+        <lastName>AERO-CARIBBEAN</lastName>
+      </aka>
+    </akaList>
+    <addressList>
+      <address>
+        <uid>25</uid>
+        <city>Havana</city>
+        <country>Cuba</country>
+      </address>
+    </addressList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>4238</uid>
+    <lastName>MAR AZUL</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <vesselInfo>
+      <callSign>CL2192</callSign>
+      <vesselType>Tug</vesselType>
+      <vesselFlag>Cuba</vesselFlag>
+      <vesselOwner>Samir de Navegacion S.A.</vesselOwner>
+      <grossRegisteredTonnage>212</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>4243</uid>
+    <lastName>EBANO</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>22133</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 7406784</idNumber>
+      </id>
+    </idList>
+    <akaList>
+      <aka>
+        <uid>3408</uid>
+        <type>f.k.a.</type>
+        <category>weak</category>
+        <lastName>ANA I</lastName>
+      </aka>
+      <aka>
+        <uid>50788</uid>
+        <type>f.k.a.</type>
+        <category>weak</category>
+        <lastName>SAND SWAN</lastName>
+      </aka>
+    </akaList>
+    <vesselInfo>
+      <vesselType>General Cargo</vesselType>
+      <vesselFlag>Panama</vesselFlag>
+      <tonnage>2595</tonnage>
+      <grossRegisteredTonnage>1865</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>4249</uid>
+    <lastName>TIFON</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>22033</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 7206512</idNumber>
+      </id>
+    </idList>
+    <vesselInfo>
+      <callSign>CL2059</callSign>
+      <vesselType>Tug</vesselType>
+      <vesselFlag>Cuba</vesselFlag>
+      <grossRegisteredTonnage>189</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+    <sdnEntry>
+    <uid>17104</uid>
+    <lastName>RYONG GUN BONG</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>DPRK</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>9556</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>8606173</idNumber>
+      </id>
+      <id>
+        <uid>134976</uid>
+        <idType>Transactions Prohibited For Persons Owned or Controlled By U.S. Financial Institutions:</idType>
+        <idNumber>North Korea Sanctions Regulations section 510.214</idNumber>
+      </id>
+      <id>
+        <uid>127091</uid>
+        <idType>Secondary sanctions risk:</idType>
+        <idNumber>North Korea Sanctions Regulations, sections 510.201 and 510.210</idNumber>
+      </id>
+    </idList>
+    <vesselInfo>
+      <vesselType>General Cargo</vesselType>
+      <vesselFlag>Democratic People's Republic of Korea</vesselFlag>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>17105</uid>
+    <lastName>TAE DONG GANG</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>DPRK</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>9557</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 7738656</idNumber>
+      </id>
+      <id>
+        <uid>127092</uid>
+        <idType>Secondary sanctions risk:</idType>
+        <idNumber>North Korea Sanctions Regulations, sections 510.201 and 510.210</idNumber>
+      </id>
+      <id>
+        <uid>134977</uid>
+        <idType>Transactions Prohibited For Persons Owned or Controlled By U.S. Financial Institutions:</idType>
+        <idNumber>North Korea Sanctions Regulations section 510.214</idNumber>
+      </id>
+    </idList>
+    <vesselInfo>
+      <vesselType>General Cargo</vesselType>
+      <vesselFlag>Democratic People's Republic of Korea</vesselFlag>
+    </vesselInfo>
+  </sdnEntry>
+   <sdnEntry>
+    <uid>15036</uid>
+    <lastName>ARTAVIL</lastName>
+    <sdnType>Vessel</sdnType>
+    <remarks>(Linked To: NATIONAL IRANIAN TANKER COMPANY)</remarks>
+    <programList>
+      <program>IRAN</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>8045</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 9187629</idNumber>
+      </id>
+      <id>
+        <uid>8114</uid>
+        <idType>MMSI</idType>
+        <idNumber>572469210</idNumber>
+      </id>
+      <id>
+        <uid>111445</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Malta</idNumber>
+      </id>
+      <id>
+        <uid>112992</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Tuvalu</idNumber>
+      </id>
+      <id>
+        <uid>113470</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>None Identified</idNumber>
+      </id>
+      <id>
+        <uid>129996</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Tanzania</idNumber>
+      </id>
+      <id>
+        <uid>119227</uid>
+        <idType>Additional Sanctions Information -</idType>
+        <idNumber>Subject to Secondary Sanctions</idNumber>
+      </id>
+    </idList>
+    <akaList>
+      <aka>
+        <uid>22153</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>ABADAN</lastName>
+      </aka>
+      <aka>
+        <uid>23827</uid>
+        <type>f.k.a.</type>
+        <category>weak</category>
+        <lastName>ALPHA</lastName>
+      </aka>
+      <aka>
+        <uid>40680</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>SHONA</lastName>
+      </aka>
+    </akaList>
+    <vesselInfo>
+      <callSign>T2EU4</callSign>
+      <vesselType>Crude/Oil Products Tanker</vesselType>
+      <vesselFlag>Iran</vesselFlag>
+      <tonnage>99144</tonnage>
+      <grossRegisteredTonnage>56068</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>15049</uid>
+    <lastName>FOREST</lastName>
+    <sdnType>Vessel</sdnType>
+    <remarks>(Linked To: NATIONAL IRANIAN TANKER COMPANY)</remarks>
+    <programList>
+      <program>IRAN</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>8058</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 9283760</idNumber>
+      </id>
+      <id>
+        <uid>8127</uid>
+        <idType>MMSI</idType>
+        <idNumber>572438210</idNumber>
+      </id>
+      <id>
+        <uid>111476</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Malta</idNumber>
+      </id>
+      <id>
+        <uid>112999</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Tuvalu</idNumber>
+      </id>
+      <id>
+        <uid>114793</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Tanzania</idNumber>
+      </id>
+      <id>
+        <uid>119266</uid>
+        <idType>Additional Sanctions Information -</idType>
+        <idNumber>Subject to Secondary Sanctions</idNumber>
+      </id>
+    </idList>
+    <akaList>
+      <aka>
+        <uid>22158</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>FAEZ</lastName>
+      </aka>
+      <aka>
+        <uid>23443</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>SATEEN</lastName>
+      </aka>
+      <aka>
+        <uid>24781</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>MAESTRO</lastName>
+      </aka>
+      <aka>
+        <uid>40667</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>FIANGA</lastName>
+      </aka>
+    </akaList>
+    <vesselInfo>
+      <callSign>T2DM4</callSign>
+      <vesselType>Chemical/Products Tanker</vesselType>
+      <vesselFlag>Iran</vesselFlag>
+      <tonnage>35124</tonnage>
+      <grossRegisteredTonnage>25214</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+</sdnList>
