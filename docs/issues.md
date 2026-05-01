@@ -124,7 +124,7 @@ Drop counters exposed as metrics with reason labels.
 
 ---
 
-## #5 — History + transactional writes + track endpoint
+## #5 — History + transactional writes + track endpoint ✅ (commit `caf83df`)
 
 **Type:** AFK
 
@@ -137,12 +137,12 @@ or simplified LineString.
 
 ### Acceptance criteria
 
-- [ ] `vessel_positions_history` table created with `PARTITION BY RANGE (occurred_at)` and current + next-month partitions, each with GIST index on `position`.
-- [ ] Migration helper script creates a new monthly partition.
-- [ ] `StorageWriterConsumer` writes `_latest` UPSERT and `_history` INSERT inside one DB transaction.
-- [ ] `GET /api/vessels/:id/track?from=&to=&simplify=` returns history.
-- [ ] Track endpoint enforces 7-day max window, validates `from < to`, returns 400 envelope on violation.
-- [ ] Server-side downsampling (or `ST_SimplifyPreserveTopology` over a built LineString) honors the `simplify` parameter.
+- [x] `vessel_positions_history` table created with `PARTITION BY RANGE (occurred_at)` and current + next-month partitions, each with GIST index on `position`.
+- [x] Migration helper script creates a new monthly partition.
+- [x] `StorageWriterConsumer` writes `_latest` UPSERT and `_history` INSERT inside one DB transaction.
+- [x] `GET /api/vessels/:id/track?from=&to=&simplify=` returns history.
+- [x] Track endpoint enforces 7-day max window, validates `from < to`, returns 400 envelope on violation.
+- [x] Server-side downsampling (or `ST_SimplifyPreserveTopology` over a built LineString) honors the `simplify` parameter.
 - [ ] Integration test: simulated DB failure mid-transaction leaves neither table mutated.
 - [ ] Integration test: track endpoint returns expected points for a fixture vessel.
 
