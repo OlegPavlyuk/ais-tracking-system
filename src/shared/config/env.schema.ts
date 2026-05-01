@@ -30,6 +30,10 @@ export const EnvSchema = z.object({
   SAMPLER_STATIONARY_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   SAMPLER_STATIONARY_SOG_KN: z.coerce.number().nonnegative().default(0.5),
   SAMPLER_STATE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+
+  WS_SEND_QUEUE_MAX: z.coerce.number().int().positive().default(256),
+  WS_BUFFERED_AMOUNT_LIMIT_BYTES: z.coerce.number().int().positive().default(1024 * 1024),
+  WS_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

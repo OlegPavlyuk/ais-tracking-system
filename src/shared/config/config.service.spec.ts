@@ -14,6 +14,9 @@ describe('ConfigService', () => {
     expect(config.get('LOG_LEVEL')).toBe('info');
     expect(config.get('METRICS_ENABLED')).toBe(true);
     expect(config.get('AIS_PROVIDERS')).toEqual(['aisstream']);
+    expect(config.get('WS_SEND_QUEUE_MAX')).toBe(256);
+    expect(config.get('WS_BUFFERED_AMOUNT_LIMIT_BYTES')).toBe(1024 * 1024);
+    expect(config.get('WS_HEARTBEAT_INTERVAL_MS')).toBe(30_000);
   });
 
   it('throws when DATABASE_URL is missing', () => {
