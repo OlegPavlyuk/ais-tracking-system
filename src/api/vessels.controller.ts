@@ -41,11 +41,7 @@ export type TrackResponse =
       geometry: { type: 'LineString'; coordinates: [number, number][] };
     };
 
-export interface VesselDetailResponse extends VesselDetailRow {
-  sanctionsStatus: null;
-  sanctionsCheckedAt: null;
-  sanctionsMatches: [];
-}
+export type VesselDetailResponse = VesselDetailRow;
 
 const BboxQuery = z.object({
   bbox: z
@@ -133,11 +129,6 @@ export class VesselsController {
     if (!row) {
       throw new ApiError('VESSEL_NOT_FOUND', `vessel ${parsed.data} not found`, HttpStatus.NOT_FOUND);
     }
-    return {
-      ...row,
-      sanctionsStatus: null,
-      sanctionsCheckedAt: null,
-      sanctionsMatches: [],
-    };
+    return row;
   }
 }

@@ -56,3 +56,24 @@ export interface RawProviderMessage<T = unknown> {
   receivedAt: string;
   payload: T;
 }
+
+export const SanctionMatchSchema = z.object({
+  entityId: z.string(),
+  source: z.string(),
+  sourceEntityId: z.string(),
+  name: z.string(),
+  matchMethod: z.enum(['imo', 'mmsi', 'name_candidate']),
+  aliases: z.array(z.string()),
+  flag: z.string().nullable(),
+  listingDate: z.string().nullable(),
+});
+
+export const VesselEnrichedEventSchema = z.object({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  vesselId: z.string().uuid(),
+  mmsi: z.string().regex(/^\d{9}$/),
+  status: z.enum(['clear', 'candidate', 'sanctioned']),
+  matches: z.array(SanctionMatchSchema),
+  checkedAt: z.string().datetime({ offset: true }),
+});
+export type VesselEnrichedEvent = z.infer<typeof VesselEnrichedEventSchema>;

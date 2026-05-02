@@ -29,12 +29,16 @@ export const vessels = pgTable(
     dimensionToStern: smallint('dimension_to_stern'),
     dimensionToPort: smallint('dimension_to_port'),
     dimensionToStarboard: smallint('dimension_to_starboard'),
+    sanctionsStatus: varchar('sanctions_status', { length: 16 }),
+    sanctionsCheckedAt: timestamp('sanctions_checked_at', { withTimezone: true }),
+    sanctionsMatches: jsonb('sanctions_matches').notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex('vessels_mmsi_unique').on(t.mmsi),
     index('vessels_imo_idx').on(t.imo),
+    index('vessels_sanctions_status_idx').on(t.sanctionsStatus),
   ],
 );
 

@@ -34,6 +34,17 @@ export type TrackResult =
   | { kind: 'points'; points: TrackPoint[] }
   | { kind: 'linestring'; coordinates: [number, number][] };
 
+export interface VesselSanctionMatch {
+  entityId: string;
+  source: string;
+  sourceEntityId: string;
+  name: string;
+  matchMethod: 'imo' | 'mmsi' | 'name_candidate';
+  aliases: string[];
+  flag: string | null;
+  listingDate: string | null;
+}
+
 export interface VesselDetailRow {
   id: string;
   mmsi: string;
@@ -46,6 +57,9 @@ export interface VesselDetailRow {
   dimensionToStern: number | null;
   dimensionToPort: number | null;
   dimensionToStarboard: number | null;
+  sanctionsStatus: 'clear' | 'candidate' | 'sanctioned' | null;
+  sanctionsCheckedAt: string | null;
+  sanctionsMatches: VesselSanctionMatch[];
   position: {
     lon: number;
     lat: number;
@@ -276,6 +290,9 @@ export class VesselsRepository {
         v.dimension_to_stern     AS "dimensionToStern",
         v.dimension_to_port      AS "dimensionToPort",
         v.dimension_to_starboard AS "dimensionToStarboard",
+        v.sanctions_status       AS "sanctionsStatus",
+        v.sanctions_checked_at   AS "sanctionsCheckedAt",
+        v.sanctions_matches      AS "sanctionsMatches",
         ST_X(p.position::geometry) AS lon,
         ST_Y(p.position::geometry) AS lat,
         p.sog,
@@ -308,6 +325,7 @@ export class VesselsRepository {
             lastSeenAt: row.lastSeenAt as string,
           }
         : null;
+    const checkedAt = row.sanctionsCheckedAt;
     return {
       id: row.id as string,
       mmsi: row.mmsi as string,
@@ -320,6 +338,14 @@ export class VesselsRepository {
       dimensionToStern: row.dimensionToStern as number | null,
       dimensionToPort: row.dimensionToPort as number | null,
       dimensionToStarboard: row.dimensionToStarboard as number | null,
+      sanctionsStatus: (row.sanctionsStatus as VesselDetailRow['sanctionsStatus']) ?? null,
+      sanctionsCheckedAt:
+        checkedAt === null || checkedAt === undefined
+          ? null
+          : checkedAt instanceof Date
+            ? checkedAt.toISOString()
+            : new Date(checkedAt as string).toISOString(),
+      sanctionsMatches: (row.sanctionsMatches as VesselSanctionMatch[] | null) ?? [],
       position,
     };
   }

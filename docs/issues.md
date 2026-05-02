@@ -223,13 +223,13 @@ gets badge updates live.
 
 ### Acceptance criteria
 
-- [ ] `EnrichmentDispatcher` consumer-group worker on `ais.events.v1` enqueues a job on: new MMSI, profile change, or stale (`sanctions_checked_at` older than 7 days).
-- [ ] `enrichment.vessel` BullMQ queue with idempotent `jobId`, exponential backoff, per-source rate limiting.
-- [ ] `Matcher` returns matches in order: exact IMO → exact MMSI → normalized name (latter as candidate / manual-review signal).
-- [ ] `EnrichmentWorker` updates `vessels` with timestamp-guarded UPDATE; publishes `vessel.enriched` to Redis Stream.
-- [ ] `FanoutConsumer` consumes `vessel.enriched` and emits matching WS messages.
-- [ ] Unit tests: `Matcher` (exact match priorities, null IMO/MMSI handling, deterministic candidate ordering).
-- [ ] Integration test: vessel discovery → enrichment job → matcher hits fixture sanctioned entity by IMO → `vessels.sanctions_status` updated → `vessel.enriched` event observable.
+- [x] `EnrichmentDispatcher` consumer-group worker on `ais.events.v1` enqueues a job on: new MMSI, profile change, or stale (`sanctions_checked_at` older than 7 days). Triggers detected via Redis cache keys `enrich:profile:{vesselId}` (set permanently by worker) and `enrich:checked:{vesselId}` (TTL = `ENRICHMENT_STALENESS_SECONDS`, default 7d).
+- [x] `enrichment.vessel` BullMQ queue with idempotent `jobId = enrich.{vesselId}.{trigger}.{profileHash}` (dot-delimited because BullMQ rejects `:` in custom IDs), exponential backoff, configurable attempts. Per-source rate limiting deferred — matcher path is DB-only, no HTTP fan-out.
+- [x] `Matcher` returns matches in order: exact IMO → exact MMSI → normalized name (latter as candidate / manual-review signal). Same `normalizeName()` applied to both sides; name candidates only surface when no exact identifier match is found.
+- [x] `EnrichmentWorker` updates `vessels` with timestamp-guarded UPDATE (`WHERE sanctions_checked_at IS NULL OR sanctions_checked_at = $observed`); publishes `vessel.enriched` to Redis Stream only when the guard accepted the update; sets Redis cache keys after success.
+- [x] `FanoutConsumer` consumes `vessel.enriched` and emits matching WS messages.
+- [x] Unit tests: `Matcher` (exact match priorities, null IMO/MMSI handling, deterministic candidate ordering).
+- [x] End-to-end test (in-process wiring): vessel discovery → enrichment job → matcher hits fixture sanctioned entity by IMO → `vessels.sanctions_status` updated → `vessel.enriched` event observable. Live verification against worker role + docker stack confirms the same loop end-to-end.
 
 ### Blocked by
 

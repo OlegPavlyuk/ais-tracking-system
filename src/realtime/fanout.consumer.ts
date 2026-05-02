@@ -1,11 +1,12 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { CanonicalEventSchema } from '../contracts';
+import { CanonicalEventSchema, VesselEnrichedEventSchema } from '../contracts';
 import { EVENT_BUS, EventBus } from '../shared/bus/event-bus';
-import { AIS_EVENTS_STREAM } from '../shared/config/constants';
+import { AIS_EVENTS_STREAM, VESSEL_ENRICHED_STREAM } from '../shared/config/constants';
 import { RealtimeGateway } from './realtime.gateway';
 import { SubscriptionService } from './subscription.service';
 
 const CONSUMER_GROUP = 'realtime-fanout';
+const ENRICHED_CONSUMER_GROUP = 'realtime-fanout-enriched';
 
 @Injectable()
 export class FanoutConsumer implements OnModuleInit {
@@ -37,5 +38,27 @@ export class FanoutConsumer implements OnModuleInit {
       }
     });
     this.logger.log(`subscribed to ${AIS_EVENTS_STREAM} group=${CONSUMER_GROUP} consumer=${consumer}`);
+
+    const enrichedConsumer = `realtime-fanout-enriched-${process.pid}`;
+    await this.bus.subscribe<unknown>(
+      VESSEL_ENRICHED_STREAM,
+      ENRICHED_CONSUMER_GROUP,
+      enrichedConsumer,
+      async (msg) => {
+        const parsed = VesselEnrichedEventSchema.safeParse(msg.payload);
+        if (!parsed.success) {
+          this.logger.warn(
+            `drop invalid vessel.enriched event ${msg.id}: ${parsed.error.issues[0]?.message}`,
+          );
+          return;
+        }
+        for (const id of this.subs.allSubscribed()) {
+          this.gateway.enqueue(id, { type: 'vessel.enriched', data: parsed.data });
+        }
+      },
+    );
+    this.logger.log(
+      `subscribed to ${VESSEL_ENRICHED_STREAM} group=${ENRICHED_CONSUMER_GROUP} consumer=${enrichedConsumer}`,
+    );
   }
 }

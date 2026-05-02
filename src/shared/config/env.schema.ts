@@ -35,6 +35,10 @@ export const EnvSchema = z.object({
   WS_BUFFERED_AMOUNT_LIMIT_BYTES: z.coerce.number().int().positive().default(1024 * 1024),
   WS_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
 
+  ENRICHMENT_STALENESS_SECONDS: z.coerce.number().int().positive().default(7 * 24 * 60 * 60),
+  ENRICHMENT_JOB_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  ENRICHMENT_JOB_BACKOFF_MS: z.coerce.number().int().positive().default(5000),
+
   OFAC_SDN_URL: z
     .string()
     .url()

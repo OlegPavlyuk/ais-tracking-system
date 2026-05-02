@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PositionEvent, StaticEvent } from '../contracts';
+import { PositionEvent, StaticEvent, VesselEnrichedEvent } from '../contracts';
 import { Bbox } from '../shared/config/constants';
 
 const BboxSchema = z
@@ -28,7 +28,7 @@ export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 export type ServerMessage =
   | { type: 'position'; data: PositionEvent }
   | { type: 'static'; data: StaticEvent }
-  | { type: 'vessel.enriched'; data: unknown }
+  | { type: 'vessel.enriched'; data: VesselEnrichedEvent }
   | { type: 'error'; error: { code: string; message: string; details?: unknown } };
 
 export function bboxFromMessage(msg: ClientMessage): Bbox {

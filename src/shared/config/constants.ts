@@ -27,3 +27,4 @@ export function bboxContains(outer: Bbox, inner: Bbox): boolean {
 }
 
 export const AIS_EVENTS_STREAM = 'ais.events.v1';
+export const VESSEL_ENRICHED_STREAM = 'vessel.enriched';

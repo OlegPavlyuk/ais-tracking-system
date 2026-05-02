@@ -55,6 +55,9 @@ describe('VesselsController', () => {
         dimensionToStern: 160,
         dimensionToPort: 3,
         dimensionToStarboard: 25,
+        sanctionsStatus: null,
+        sanctionsCheckedAt: null,
+        sanctionsMatches: [],
         position: {
           lon: 41.5,
           lat: 41.5,
