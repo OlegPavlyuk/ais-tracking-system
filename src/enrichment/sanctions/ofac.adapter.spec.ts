@@ -11,6 +11,10 @@ async function collect(adapter: OfacAdapter): Promise<VesselEntity[]> {
   return out;
 }
 
+async function collectFromXml(xml: string): Promise<VesselEntity[]> {
+  return collect(OfacAdapter.fromString(xml));
+}
+
 describe('OfacAdapter', () => {
   let adapter: OfacAdapter;
   let entities: VesselEntity[];
@@ -59,9 +63,130 @@ describe('OfacAdapter', () => {
     expect(byUid.get('15049')!.mmsi).toBe('572438210');
   });
 
+  it('extracts a valid 9-digit MMSI', async () => {
+    const entities = await collectFromXml(`
+      <sdnList>
+        <sdnEntry>
+          <uid>9001</uid>
+          <lastName>VALID MMSI</lastName>
+          <sdnType>Vessel</sdnType>
+          <idList>
+            <id>
+              <idType>MMSI</idType>
+              <idNumber>123456789</idNumber>
+            </id>
+          </idList>
+        </sdnEntry>
+      </sdnList>
+    `);
+
+    expect(entities).toHaveLength(1);
+    const entity = entities[0]!;
+    expect(entity.mmsi).toBe('123456789');
+  });
+
+  it('returns null for a non-9-digit MMSI and still yields the vessel', async () => {
+    const entities = await collectFromXml(`
+      <sdnList>
+        <sdnEntry>
+          <uid>9002</uid>
+          <lastName>INVALID MMSI</lastName>
+          <sdnType>Vessel</sdnType>
+          <idList>
+            <id>
+              <idType>MMSI</idType>
+              <idNumber>3708590000</idNumber>
+            </id>
+          </idList>
+        </sdnEntry>
+      </sdnList>
+    `);
+
+    expect(entities).toHaveLength(1);
+    const entity = entities[0]!;
+    expect(entity).toMatchObject({
+      sourceEntityId: '9002',
+      name: 'INVALID MMSI',
+      mmsi: null,
+    });
+    expect(entity.rawPayload).toMatchObject({
+      idList: {
+        id: {
+          idType: 'MMSI',
+          idNumber: '3708590000',
+        },
+      },
+    });
+  });
+
   it('returns null MMSI when no MMSI id entry is present', () => {
     expect(byUid.get('4238')!.mmsi).toBeNull();
     expect(byUid.get('17104')!.mmsi).toBeNull();
+  });
+
+  it('extracts a valid 7-digit IMO from both prefixed and bare forms', async () => {
+    const entities = await collectFromXml(`
+      <sdnList>
+        <sdnEntry>
+          <uid>9003</uid>
+          <lastName>PREFIXED IMO</lastName>
+          <sdnType>Vessel</sdnType>
+          <idList>
+            <id>
+              <idType>Vessel Registration Identification</idType>
+              <idNumber>IMO 1234567</idNumber>
+            </id>
+          </idList>
+        </sdnEntry>
+        <sdnEntry>
+          <uid>9004</uid>
+          <lastName>BARE IMO</lastName>
+          <sdnType>Vessel</sdnType>
+          <idList>
+            <id>
+              <idType>Vessel Registration Identification</idType>
+              <idNumber>1234567</idNumber>
+            </id>
+          </idList>
+        </sdnEntry>
+      </sdnList>
+    `);
+
+    expect(entities.map((entity) => entity.imo)).toEqual(['1234567', '1234567']);
+  });
+
+  it('returns null for a non-7-digit IMO and still yields the vessel', async () => {
+    const entities = await collectFromXml(`
+      <sdnList>
+        <sdnEntry>
+          <uid>9005</uid>
+          <lastName>INVALID IMO</lastName>
+          <sdnType>Vessel</sdnType>
+          <idList>
+            <id>
+              <idType>Vessel Registration Identification</idType>
+              <idNumber>IMO 12345678</idNumber>
+            </id>
+          </idList>
+        </sdnEntry>
+      </sdnList>
+    `);
+
+    expect(entities).toHaveLength(1);
+    const entity = entities[0]!;
+    expect(entity).toMatchObject({
+      sourceEntityId: '9005',
+      name: 'INVALID IMO',
+      imo: null,
+    });
+    expect(entity.rawPayload).toMatchObject({
+      idList: {
+        id: {
+          idType: 'Vessel Registration Identification',
+          idNumber: 'IMO 12345678',
+        },
+      },
+    });
   });
 
   it('keeps only strong-category aliases in the structured aliases array', () => {

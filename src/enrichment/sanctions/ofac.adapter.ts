@@ -45,7 +45,7 @@ function extractImo(entry: RawSdnEntry): string | null {
     if (id.idType === 'Vessel Registration Identification') {
       const raw = String(id.idNumber).trim();
       const stripped = raw.replace(/^IMO\s+/i, '').trim();
-      if (/^\d+$/.test(stripped)) return stripped;
+      if (/^\d{7}$/.test(stripped)) return stripped;
     }
   }
   return null;
@@ -56,7 +56,7 @@ function extractMmsi(entry: RawSdnEntry): string | null {
   for (const id of ids) {
     if (id.idType === 'MMSI') {
       const raw = String(id.idNumber).trim();
-      if (/^\d+$/.test(raw)) return raw;
+      if (/^\d{9}$/.test(raw)) return raw;
     }
   }
   return null;
