@@ -276,19 +276,19 @@ sanctions admin, stream lag inspection, all gated by `AdminTokenGuard`.
 
 ### Acceptance criteria
 
-- [ ] `FailureHandler` increments retry counter (Redis hash); leaves message unacked for re-delivery.
-- [ ] On 3rd failure: publishes to `ais.deadletter` with `{ originalEvent, consumerGroup, error, attempts, firstFailedAt, lastFailedAt }`, then ACKs original.
-- [ ] `XAUTOCLAIM` background task per consumer group recovers stuck pending messages.
-- [ ] Structured DLQ logs include `reason`, `consumerGroup`, event `kind`, `mmsi`.
-- [ ] Stream `MAXLEN ~ 100k` (configurable) approximate trim on producer.
-- [ ] `AdminTokenGuard` enforces `ADMIN_TOKEN` outside local dev; allows unauthenticated when token unconfigured in dev mode.
-- [ ] `GET /admin/deadletter?stream=&limit=` lists recent DLQ entries.
-- [ ] `POST /admin/deadletter/:id/replay` re-publishes to original stream.
-- [ ] `GET /admin/sanctions/imports` lists recent import runs.
-- [ ] `POST /admin/sanctions/imports/:source/run` triggers an out-of-schedule import.
-- [ ] `GET /admin/streams` returns consumer-group lag and pending counts.
-- [ ] Unit tests: `FailureHandler` (retry increment, DLQ on 3rd, ACK), `AdminTokenGuard`.
-- [ ] Integration test: poison fixture event hits storage consumer 3×, lands in DLQ; consumer group continues progressing; admin replay succeeds.
+- [x] `FailureHandler` increments retry counter (Redis hash); leaves message unacked for re-delivery.
+- [x] On 3rd failure: publishes to `ais.deadletter` with `{ originalEvent, consumerGroup, error, attempts, firstFailedAt, lastFailedAt }`, then ACKs original.
+- [x] `XAUTOCLAIM` background task per consumer group recovers stuck pending messages.
+- [x] Structured DLQ logs include `reason`, `consumerGroup`, event `kind`, `mmsi`.
+- [x] Stream `MAXLEN ~ 100k` (configurable) approximate trim on producer.
+- [x] `AdminTokenGuard` enforces `ADMIN_TOKEN` outside local dev; allows unauthenticated when token unconfigured in dev mode.
+- [x] `GET /admin/deadletter?stream=&limit=` lists recent DLQ entries.
+- [x] `POST /admin/deadletter/:id/replay` re-publishes to original stream.
+- [x] `GET /admin/sanctions/imports` lists recent import runs.
+- [x] `POST /admin/sanctions/imports/:source/run` triggers an out-of-schedule import.
+- [x] `GET /admin/streams` returns consumer-group lag and pending counts.
+- [x] Unit tests: `FailureHandler` (retry increment, DLQ on 3rd, ACK), `AdminTokenGuard`.
+- [x] Integration test: poison fixture event hits storage consumer 3×, lands in DLQ; consumer group continues progressing; admin replay succeeds.
 
 ### Blocked by
 

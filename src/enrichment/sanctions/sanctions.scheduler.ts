@@ -29,7 +29,4 @@ export class SanctionsScheduler implements OnApplicationBootstrap {
     this.logger.log(`scheduled sanctions.import ofac with cron="${cron}"`);
   }
 
-  async triggerNow(source: SanctionsImportJobData['source']): Promise<void> {
-    await this.queue.add(`${source}.manual`, { source }, { removeOnComplete: 100, removeOnFail: 100 });
-  }
 }

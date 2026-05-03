@@ -79,6 +79,33 @@ export class SanctionsRepository {
     });
   }
 
+  async findRecentRuns(limit: number): Promise<SanctionsImportRunRow[]> {
+    const rows = await this.dbs.db.execute(sql`
+      SELECT
+        id,
+        source,
+        started_at      AS "startedAt",
+        finished_at     AS "finishedAt",
+        status,
+        records_imported AS "recordsImported",
+        errors
+      FROM sanctions_import_runs
+      ORDER BY started_at DESC
+      LIMIT ${limit}
+    `);
+    const toIso = (v: unknown): string =>
+      v instanceof Date ? v.toISOString() : new Date(v as string).toISOString();
+    return (rows as unknown as Array<Record<string, unknown>>).map((row) => ({
+      id: Number(row.id),
+      source: row.source as string,
+      startedAt: toIso(row.startedAt),
+      finishedAt: row.finishedAt === null ? null : toIso(row.finishedAt),
+      status: row.status as string,
+      recordsImported: Number(row.recordsImported),
+      errors: (row.errors as unknown[]) ?? [],
+    }));
+  }
+
   async findLastRunBySource(source: string): Promise<SanctionsImportRunRow | null> {
     const rows = await this.dbs.db.execute(sql`
       SELECT

@@ -19,16 +19,6 @@ import { EnrichmentRepository } from './enrichment.repository';
     DbModule,
     RedisModule,
     BusModule,
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          url: config.get('REDIS_URL'),
-          maxRetriesPerRequest: null,
-        },
-      }),
-    }),
     BullModule.registerQueueAsync({
       name: ENRICHMENT_VESSEL_QUEUE,
       imports: [ConfigModule],

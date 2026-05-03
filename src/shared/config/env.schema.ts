@@ -39,6 +39,11 @@ export const EnvSchema = z.object({
   ENRICHMENT_JOB_ATTEMPTS: z.coerce.number().int().positive().default(3),
   ENRICHMENT_JOB_BACKOFF_MS: z.coerce.number().int().positive().default(5000),
 
+  STREAM_MAXLEN: z.coerce.number().int().positive().default(100_000),
+  STREAM_RETRY_LIMIT: z.coerce.number().int().positive().default(3),
+  STREAM_PENDING_CLAIM_IDLE_MS: z.coerce.number().int().positive().default(60_000),
+  STREAM_AUTOCLAIM_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
+
   OFAC_SDN_URL: z
     .string()
     .url()

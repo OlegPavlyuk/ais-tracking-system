@@ -5,6 +5,7 @@ import { MetricsModule } from './shared/metrics/metrics.module';
 import { DbModule } from './shared/db/db.module';
 import { RedisModule } from './shared/redis/redis.module';
 import { BusModule } from './shared/bus/bus.module';
+import { QueueModule } from './shared/queue/queue.module';
 import { HealthModule } from './shared/health/health.module';
 import { ApiModule } from './api/api.module';
 import { AdminModule } from './admin/admin.module';
@@ -24,6 +25,7 @@ const SHARED: NestImport[] = [
   DbModule,
   RedisModule,
   BusModule,
+  QueueModule,
   HealthModule,
 ];
 
