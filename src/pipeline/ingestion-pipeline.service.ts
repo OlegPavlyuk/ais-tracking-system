@@ -7,9 +7,9 @@ import {
   AIS_MESSAGES_DROPPED_TOTAL,
   DropReason,
 } from '../shared/metrics/drop-reasons';
-import { AisStreamAdapter } from '../ingestion/aisstream.adapter';
-import { RawFilter } from '../ingestion/raw-filter';
-import { AisStreamNormalizer } from './normalizer';
+import { RawProviderMessage } from '../contracts';
+import { ProviderRegistry } from '../ingestion/provider-registry';
+import { ProviderNormalizer } from '../ingestion/provider';
 import { DedupService } from './dedup.service';
 import { SamplerService } from './sampler.service';
 
@@ -18,9 +18,7 @@ export class IngestionPipelineService implements OnModuleInit {
   private readonly logger = new Logger(IngestionPipelineService.name);
 
   constructor(
-    private readonly adapter: AisStreamAdapter,
-    private readonly filter: RawFilter,
-    private readonly normalizer: AisStreamNormalizer,
+    private readonly registry: ProviderRegistry,
     private readonly dedup: DedupService,
     private readonly sampler: SamplerService,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
@@ -29,37 +27,35 @@ export class IngestionPipelineService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.adapter.onMessage(async (raw) => {
-      const filterResult = this.filter.accept(raw.payload);
-      if (!filterResult.accepted) {
-        this.drop(filterResult.reason);
-        return;
-      }
+    for (const { adapter, normalizer } of this.registry.providers()) {
+      adapter.onMessage((raw) => {
+        this.handle(raw, normalizer).catch((err) => {
+          this.logger.error(
+            `pipeline error for provider=${adapter.id}: ${(err as Error).message}`,
+          );
+        });
+      });
+    }
+  }
 
-      const event = this.normalizer.normalize(raw);
-      if (!event) {
-        this.drop('invalid');
-        return;
-      }
-
-      if (!(await this.dedup.shouldAccept(event.mmsi, event.occurredAt))) {
-        this.drop('duplicate');
-        return;
-      }
-
-      if (event.kind === 'position' && !(await this.sampler.shouldEmit(event))) {
-        this.drop('sampled');
-        return;
-      }
-
-      try {
-        await this.bus.publish(AIS_EVENTS_STREAM, event);
-      } catch (err) {
-        this.logger.error(
-          `failed to publish event mmsi=${event.mmsi}: ${(err as Error).message}`,
-        );
-      }
-    });
+  private async handle(
+    raw: RawProviderMessage<unknown>,
+    normalizer: ProviderNormalizer,
+  ): Promise<void> {
+    const event = normalizer.normalize(raw);
+    if (!event) {
+      this.drop('invalid');
+      return;
+    }
+    if (!(await this.dedup.shouldAccept(event.mmsi, event.occurredAt))) {
+      this.drop('duplicate');
+      return;
+    }
+    if (event.kind === 'position' && !(await this.sampler.shouldEmit(event))) {
+      this.drop('sampled');
+      return;
+    }
+    await this.bus.publish(AIS_EVENTS_STREAM, event);
   }
 
   private drop(reason: DropReason): void {

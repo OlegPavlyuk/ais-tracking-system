@@ -309,13 +309,13 @@ without flipping readiness.
 
 ### Acceptance criteria
 
-- [ ] `ProviderRegistry` reads `AIS_PROVIDERS` env, instantiates each adapter and normalizer pair, rejects unknown IDs at boot.
-- [ ] AISStream adapter reconnects with exponential backoff (1s → 30s capped); resets backoff on success message.
-- [ ] Provider health: `health()` exposes `connected`, `lastMessageAt`, `reconnectCount`.
-- [ ] Metrics: `ais_provider_connected{provider}`, `ais_provider_last_message_age_seconds{provider}`, `ais_provider_reconnects_total{provider}`.
-- [ ] `/readyz` payload includes `feedDegraded: true` when `lastMessageAt` is older than threshold (e.g. 60s) but readiness still returns 200.
-- [ ] Unit tests: `ProviderRegistry` (config resolution, unknown ID rejection).
-- [ ] Integration test: kill the AISStream connection mid-test, observe reconnect, `feedDegraded` flag flip on/off, no pod-restart-equivalent triggered.
+- [x] `ProviderRegistry` reads `AIS_PROVIDERS` env, resolves to a fixed set of `(adapter, normalizer)` pairs at construction, rejects unknown IDs at boot. AISStream-specific raw filtering moved into `ingestion/aisstream/aisstream.raw-filter.ts` and is invoked inside the adapter, so the pipeline is fully provider-agnostic.
+- [x] AISStream adapter reconnects with exponential backoff (1s → 2s → 4s → 8s → 16s, capped at 30s, ±20% jitter). Attempt counter resets only after the first raw message post-connect, not on socket `open`.
+- [x] Provider health: `health()` exposes `connected`, `lastMessageAt`, `reconnectCount`, `startedAt`.
+- [x] Metrics: `ais_provider_connected{provider}`, `ais_provider_last_message_age_seconds{provider}`, `ais_provider_reconnects_total{provider}` — refreshed every 5s by `ProviderRegistry`.
+- [x] `/readyz` payload includes `feedDegraded: true` when any provider has no message older than `PROVIDER_FEED_DEGRADED_SECONDS` (default 60), or when the adapter started but never received a frame past the threshold; readiness still returns 200.
+- [x] Unit tests: `ProviderRegistry` (config resolution, unknown ID rejection, dedup, mismatch detection, lifecycle), `nextBackoffMs` (exponential series, jitter bounds, cap), `AisStreamAdapter` (reconnect loop with fake timers, attempt reset after message, drop-counter on filtered messages, stop cancels pending reconnects), `HealthService.deriveFeedDegraded` (rollup across providers, `startedAt` fallback, never-started case).
+- [ ] Integration test: kill the AISStream connection mid-test, observe reconnect, `feedDegraded` flag flip on/off, no pod-restart-equivalent triggered. (Deferred until integration harness lands.)
 
 ### Blocked by
 

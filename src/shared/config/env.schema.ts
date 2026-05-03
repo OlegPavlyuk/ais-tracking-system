@@ -20,6 +20,8 @@ export const EnvSchema = z.object({
     .transform((s) => s.split(',').map((p) => p.trim()).filter(Boolean)),
   AISSTREAM_API_KEY: z.string().optional(),
 
+  PROVIDER_FEED_DEGRADED_SECONDS: z.coerce.number().int().positive().default(60),
+
   METRICS_ENABLED: z
     .string()
     .default('true')

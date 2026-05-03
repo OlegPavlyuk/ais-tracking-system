@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DropReason } from '../shared/metrics/drop-reasons';
+import { DropReason } from '../../shared/metrics/drop-reasons';
 
 // ExtendedClassBPositionReport (Type 19) is observed in fixtures but intentionally
 // deferred: it is a hybrid (position + Name/ShipType/Dimension) and not yet
@@ -21,11 +21,12 @@ interface AisStreamLike {
 }
 
 /**
- * Drops AIS messages that are not vessel-originated or whose MMSI is not a
+ * Drops AISStream messages that are not vessel-originated or whose MMSI is not a
  * 9-digit operational identifier (base stations, AtoN, SAR aircraft, etc.).
+ * Provider-scoped: tied to AISStream's `MessageType` / `MetaData.MMSI` envelope.
  */
 @Injectable()
-export class RawFilter {
+export class AisStreamRawFilter {
   accept(raw: unknown): RawFilterResult {
     if (!raw || typeof raw !== 'object') return { accepted: false, reason: 'invalid' };
     const msg = raw as AisStreamLike;

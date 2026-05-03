@@ -2,6 +2,11 @@ import { Global, Module } from '@nestjs/common';
 import { PrometheusModule, makeCounterProvider, makeGaugeProvider } from '@willsoto/nestjs-prometheus';
 import { AIS_MESSAGES_DROPPED_TOTAL, DROP_REASONS } from './drop-reasons';
 import {
+  AIS_PROVIDER_CONNECTED,
+  AIS_PROVIDER_LAST_MESSAGE_AGE_SECONDS,
+  AIS_PROVIDER_RECONNECTS_TOTAL,
+} from './provider-metrics';
+import {
   WS_CONNECTIONS_ACTIVE,
   WS_MESSAGES_DROPPED_TOTAL,
   WS_MESSAGES_SENT_TOTAL,
@@ -36,6 +41,24 @@ const wsBboxUpdatesProvider = makeCounterProvider({
   help: 'Total subscribe/update_subscription messages accepted from clients.',
 });
 
+const providerConnectedProvider = makeGaugeProvider({
+  name: AIS_PROVIDER_CONNECTED,
+  help: '1 if the AIS provider connection is currently OPEN, 0 otherwise.',
+  labelNames: ['provider'] as const,
+});
+
+const providerLastMessageAgeProvider = makeGaugeProvider({
+  name: AIS_PROVIDER_LAST_MESSAGE_AGE_SECONDS,
+  help: 'Seconds since the last raw message received from the AIS provider.',
+  labelNames: ['provider'] as const,
+});
+
+const providerReconnectsProvider = makeCounterProvider({
+  name: AIS_PROVIDER_RECONNECTS_TOTAL,
+  help: 'Total reconnect attempts made by the AIS provider adapter.',
+  labelNames: ['provider'] as const,
+});
+
 @Global()
 @Module({
   imports: [
@@ -50,6 +73,9 @@ const wsBboxUpdatesProvider = makeCounterProvider({
     wsMessagesSentProvider,
     wsMessagesDroppedProvider,
     wsBboxUpdatesProvider,
+    providerConnectedProvider,
+    providerLastMessageAgeProvider,
+    providerReconnectsProvider,
   ],
   exports: [
     PrometheusModule,
@@ -58,6 +84,9 @@ const wsBboxUpdatesProvider = makeCounterProvider({
     wsMessagesSentProvider,
     wsMessagesDroppedProvider,
     wsBboxUpdatesProvider,
+    providerConnectedProvider,
+    providerLastMessageAgeProvider,
+    providerReconnectsProvider,
   ],
 })
 export class MetricsModule {

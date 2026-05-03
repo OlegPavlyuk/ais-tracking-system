@@ -1,17 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { RawFilter } from './raw-filter';
+import { AisStreamRawFilter } from './aisstream.raw-filter';
 
 function loadFixture(): unknown[] {
-  const path = join(__dirname, '..', '..', 'aisstream', 'raw-api-response.jsonl');
+  const path = join(__dirname, '..', '..', '..', 'aisstream', 'raw-api-response.jsonl');
   return readFileSync(path, 'utf8')
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line));
 }
 
-describe('RawFilter', () => {
-  const filter = new RawFilter();
+describe('AisStreamRawFilter', () => {
+  const filter = new AisStreamRawFilter();
 
   it('accepts PositionReport with 9-digit MMSI', () => {
     const msg = {

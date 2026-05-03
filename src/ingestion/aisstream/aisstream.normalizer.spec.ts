@@ -1,5 +1,5 @@
-import { AisStreamNormalizer } from './normalizer';
-import { PositionEventSchema, StaticEventSchema, SCHEMA_VERSION } from '../contracts';
+import { AisStreamNormalizer } from './aisstream.normalizer';
+import { PositionEventSchema, StaticEventSchema, SCHEMA_VERSION } from '../../contracts';
 
 describe('AisStreamNormalizer', () => {
   const normalizer = new AisStreamNormalizer();

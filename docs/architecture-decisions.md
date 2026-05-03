@@ -174,17 +174,32 @@ Two-part contract — keeps transport and semantics independently swappable:
 
 - `AisProviderAdapter` — transport boundary. Connect/reconnect, auth,
   provider-specific subscription format, health, backoff. Produces
-  `RawProviderMessage` events.
+  `RawProviderMessage` events. **Provider-scoped raw filtering is the
+  adapter's job**: AISStream's `MessageType` / `MetaData.MMSI` envelope is
+  not portable, so each adapter owns its own filter (e.g.
+  `AisStreamRawFilter`) and increments
+  `ais_messages_dropped_total{reason}` on rejects. Only accepted raw
+  messages are emitted into the pipeline.
 - `ProviderNormalizer` — semantic boundary. Converts `RawProviderMessage`
-  into canonical `position` / `static` events.
+  into canonical `position` / `static` events. Co-located with its
+  adapter under `ingestion/<provider>/`.
+- `ProviderRegistry` — resolves `AIS_PROVIDERS` env into a fixed set of
+  `(adapter, normalizer)` pairs at construction. Throws on unknown ID.
+  Owns adapter lifecycle and the provider-health metric refresh loop.
 
 For MVP: single active provider, AISStream. Reconnect with exponential
-backoff, health metrics (`connected`, `lastMessageAt`, `reconnectCount`),
-structured logs, degraded-provider metric when feed goes stale.
+backoff (1s → 2s → 4s → 8s → 16s, capped at 30s, ±20% jitter). Backoff
+attempt counter resets only after the **first raw message** received
+post-connect, not on socket open. Health surface:
+`{ connected, lastMessageAt, reconnectCount, startedAt }`.
+Degraded-feed signal in `/readyz` payload (`feedDegraded: true`) when any
+provider has no message after `PROVIDER_FEED_DEGRADED_SECONDS`
+(default 60); readiness still returns 200.
 
 Provider selection is env-driven: `AIS_PROVIDERS=aisstream`. Adding another
-provider later means a new adapter + normalizer + config entry — no pipeline
-changes.
+provider means dropping a new `ingestion/<provider>/` folder
+(adapter + normalizer + raw filter) and registering it in
+`IngestionModule` — no pipeline changes.
 
 No automatic failover in MVP. Multi-active is a free side-effect of the
 existing dedup logic if a second adapter is started.

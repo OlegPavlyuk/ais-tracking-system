@@ -6,7 +6,8 @@ import {
   RawProviderMessage,
   SCHEMA_VERSION,
   StaticEvent,
-} from '../contracts';
+} from '../../contracts';
+import { ProviderNormalizer } from '../provider';
 
 interface AisStreamPositionReport {
   Cog?: number;
@@ -101,7 +102,7 @@ function dimensionsOrNull(d: AisStreamDimension | undefined): {
 }
 
 @Injectable()
-export class AisStreamNormalizer {
+export class AisStreamNormalizer implements ProviderNormalizer {
   private readonly logger = new Logger(AisStreamNormalizer.name);
   readonly provider = 'aisstream';
 
