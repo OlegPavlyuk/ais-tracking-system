@@ -39,6 +39,19 @@ export function bboxArea(b: Bbox): number {
   return (b.maxLon - b.minLon) * (b.maxLat - b.minLat);
 }
 
+// Clamp a viewport bbox to the supported coverage area. Returns null when there
+// is no overlap (e.g. user panned far away). The backend enforces strict
+// containment, and fitBounds(...) plus padding/aspect-ratio means getBounds()
+// often exceeds the supported bbox by a sliver even on initial load.
+export function clampBbox(b: Bbox, bounds: Bbox): Bbox | null {
+  const minLon = Math.max(b.minLon, bounds.minLon);
+  const minLat = Math.max(b.minLat, bounds.minLat);
+  const maxLon = Math.min(b.maxLon, bounds.maxLon);
+  const maxLat = Math.min(b.maxLat, bounds.maxLat);
+  if (!(minLon < maxLon) || !(minLat < maxLat)) return null;
+  return { minLon, minLat, maxLon, maxLat };
+}
+
 export function bboxEquals(a: Bbox, b: Bbox): boolean {
   return (
     a.minLon === b.minLon &&

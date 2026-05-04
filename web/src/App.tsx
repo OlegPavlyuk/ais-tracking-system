@@ -9,7 +9,7 @@ import { useVesselsStore } from './store/vessels';
 import { useDebouncedBbox } from './hooks/useDebouncedBbox';
 import { ApiError, fetchSnapshot } from './api/client';
 import { WsClient, buildWsUrl, type WsClientHandlers } from './lib/wsClient';
-import { bboxArea, bboxContains } from './lib/coverageBbox';
+import { bboxArea, bboxContains, clampBbox, getSupportedBbox } from './lib/coverageBbox';
 import type { Bbox } from './lib/protocol';
 
 const WS_PATH = '/ws/positions';
@@ -27,22 +27,36 @@ export function App() {
   const bootstrappedRef = useRef(false);
 
   const debouncedBbox = useDebouncedBbox(useVesselsStore((s) => s.bbox));
+  const supportedBboxRef = useRef<Bbox>(getSupportedBbox());
 
   useVesselsLayer(map);
   useViewportSync(map);
 
   const runFetch = useCallback((bbox: Bbox, zoom: number | null) => {
+    // Clamp to supported coverage area. fitBounds() padding plus aspect-ratio
+    // makes the raw viewport overshoot the supported bbox by a sliver, which
+    // the backend rejects with BBOX_OUT_OF_SCOPE.
+    const clamped = clampBbox(bbox, supportedBboxRef.current);
+    if (!clamped) {
+      const store = useVesselsStore.getState();
+      store.setError({
+        code: 'BBOX_OUT_OF_SCOPE',
+        message: 'Outside supported coverage area.',
+        details: { supportedBbox: supportedBboxRef.current },
+      });
+      return;
+    }
     const id = ++requestIdRef.current;
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    fetchSnapshot(bbox, ctrl.signal)
+    fetchSnapshot(clamped, ctrl.signal)
       .then((res) => {
         if (id !== requestIdRef.current) return;
         const store = useVesselsStore.getState();
         store.applySnapshot(res.vessels);
         store.setError(null);
-        lastFetchedBboxRef.current = bbox;
+        lastFetchedBboxRef.current = clamped;
         lastFetchedZoomRef.current = zoom;
       })
       .catch((err: unknown) => {
@@ -97,7 +111,8 @@ export function App() {
       const bbox = useVesselsStore.getState().bbox;
       if (!bbox) return;
       bootstrappedRef.current = true;
-      ws.start(bbox);
+      const clamped = clampBbox(bbox, supportedBboxRef.current) ?? bbox;
+      ws.start(clamped);
       runFetch(bbox, map.getZoom());
     };
     startIfReady();
@@ -117,7 +132,16 @@ export function App() {
   useEffect(() => {
     if (!map || !wsRef.current || !debouncedBbox) return;
     if (!bootstrappedRef.current) return;
-    wsRef.current.updateSubscription(debouncedBbox);
+    const wireBbox = clampBbox(debouncedBbox, supportedBboxRef.current);
+    if (!wireBbox) {
+      useVesselsStore.getState().setError({
+        code: 'BBOX_OUT_OF_SCOPE',
+        message: 'Outside supported coverage area.',
+        details: { supportedBbox: supportedBboxRef.current },
+      });
+      return;
+    }
+    wsRef.current.updateSubscription(wireBbox);
 
     const zoom = map.getZoom();
     const lastBbox = lastFetchedBboxRef.current;
@@ -127,11 +151,11 @@ export function App() {
     const significant =
       lastBbox === null ||
       zoomChanged ||
-      !bboxContains(lastBbox, debouncedBbox) ||
+      !bboxContains(lastBbox, wireBbox) ||
       (() => {
         const lastArea = bboxArea(lastBbox);
         if (lastArea <= 0) return true;
-        const ratio = bboxArea(debouncedBbox) / lastArea;
+        const ratio = bboxArea(wireBbox) / lastArea;
         return ratio < AREA_RATIO_MIN || ratio > AREA_RATIO_MAX;
       })();
 
