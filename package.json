@@ -24,7 +24,9 @@
     "migrate": "drizzle-kit migrate",
     "migrate:generate": "drizzle-kit generate",
     "migrate:check": "drizzle-kit check",
-    "partition:create": "ts-node scripts/create-partition.ts"
+    "partition:create": "ts-node scripts/create-partition.ts",
+    "web:dev": "pnpm --dir web dev",
+    "web:build": "pnpm --dir web build"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

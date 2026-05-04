@@ -60,13 +60,13 @@ proxy to the existing Docker backend on `:3000` (no backend CORS work).
 
 ### Phase 1 — Scaffold (`web/`)
 
-- [ ] 1.1 Create `web/` with Vite React-TS scaffold (hand-write or `pnpm create vite`); set `engines.node >=22` and `packageManager: pnpm@10.27.0`.
-- [ ] 1.2 `tsconfig.json`: enable Q2 strictness flags.
-- [ ] 1.3 `vite.config.ts`: aliases (`@contracts` -> `../src/contracts`, `@protocol` -> `../src/realtime/protocol`, `@/` -> `./src`); proxy `/api` and `/ws` (with `ws: true`) -> `http://localhost:3000`.
-- [ ] 1.4 Tailwind setup (config + PostCSS + `index.css` directives). Stable Vite-friendly setup; do not fight tooling.
-- [ ] 1.5 Install runtime deps: `maplibre-gl`, `zustand`, `zod`, `clsx`. Dev deps: `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@types/node`.
-- [ ] 1.6 Optional root `web:dev` / `web:build` convenience scripts in repo `package.json`. Do NOT disrupt existing backend scripts or Docker flow.
-- [ ] 1.7 Verify Vite build does not pull backend Nest/Node imports through `@contracts` / `@protocol`. If it does, STOP and report.
+- [x] 1.1 Create `web/` with Vite React-TS scaffold (hand-write or `pnpm create vite`); set `engines.node >=22` and `packageManager: pnpm@10.27.0`.
+- [x] 1.2 `tsconfig.json`: enable Q2 strictness flags.
+- [x] 1.3 `vite.config.ts`: aliases (`@contracts` -> `../src/contracts`, `@protocol` -> `../src/realtime/protocol`, `@/` -> `./src`); proxy `/api` and `/ws` (with `ws: true`) -> `http://localhost:3000`.
+- [x] 1.4 Tailwind setup (config + PostCSS + `index.css` directives). Stable Vite-friendly setup; do not fight tooling.
+- [x] 1.5 Install runtime deps: `maplibre-gl`, `zustand`, `zod`, `clsx`. Dev deps: `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@types/node`.
+- [x] 1.6 Optional root `web:dev` / `web:build` convenience scripts in repo `package.json`. Do NOT disrupt existing backend scripts or Docker flow.
+- [x] 1.7 Verify Vite build does not pull backend Nest/Node imports through `@contracts` / `@protocol`. If it does, STOP and report. (verified: contracts/protocol/constants are Zod + pure TS only)
 
 ### Phase 2 — Core building blocks (no map yet)
 
@@ -149,4 +149,5 @@ Acceptance criteria are in `docs/issues.md` under slice #13. The plan
 document maps every decision back to those criteria; if you find a gap,
 flag it before coding.
 
-Start with Phase 1.
+Phase 1 is already committed (scaffold, deps, aliases, Tailwind, proxy,
+root `web:dev`/`web:build` scripts). Start with Phase 2.
