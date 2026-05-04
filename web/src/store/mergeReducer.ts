@@ -1,0 +1,131 @@
+import type { PositionEvent, SnapshotRow, StaticEvent, Vessel, VesselEnrichedEvent } from './types';
+
+export function emptyVessel(mmsi: string): Vessel {
+  return {
+    mmsi,
+    vesselId: null,
+    lat: null,
+    lon: null,
+    sog: null,
+    cog: null,
+    trueHeading: null,
+    navStatus: null,
+    occurredAt: null,
+    imo: null,
+    name: null,
+    callSign: null,
+    shipType: null,
+    destination: null,
+    staticOccurredAt: null,
+    sanctionsStatus: null,
+    sanctionsCheckedAt: null,
+  };
+}
+
+function isNewer(incoming: string | null | undefined, current: string | null | undefined): boolean {
+  if (!incoming) return false;
+  if (!current) return true;
+  return Date.parse(incoming) >= Date.parse(current);
+}
+
+function preferNonNull<T>(incoming: T | null | undefined, current: T | null): T | null {
+  if (incoming === null || incoming === undefined) return current;
+  return incoming;
+}
+
+export function applySnapshotRows(
+  prev: ReadonlyMap<string, Vessel>,
+  rows: readonly SnapshotRow[],
+): Map<string, Vessel> {
+  const next = new Map<string, Vessel>();
+  for (const row of rows) {
+    const existing = prev.get(row.mmsi);
+    const base = existing ?? emptyVessel(row.mmsi);
+    const merged: Vessel = { ...base };
+
+    merged.vesselId = row.id;
+
+    // Position fields: only overwrite when snapshot row's lastSeenAt is >= current occurredAt.
+    if (isNewer(row.lastSeenAt, base.occurredAt)) {
+      merged.lat = row.lat;
+      merged.lon = row.lon;
+      merged.sog = row.sog;
+      merged.cog = row.cog;
+      merged.trueHeading = row.trueHeading;
+      merged.navStatus = row.navStatus;
+      merged.occurredAt = row.occurredAt;
+    }
+
+    // Profile fields: merge without overwriting non-null with null.
+    merged.imo = preferNonNull(row.imo, base.imo);
+    merged.name = preferNonNull(row.name, base.name);
+    merged.callSign = preferNonNull(row.callSign, base.callSign);
+    merged.shipType = preferNonNull(row.shipType, base.shipType);
+
+    next.set(row.mmsi, merged);
+  }
+  return next;
+}
+
+export function applyPosition(
+  prev: ReadonlyMap<string, Vessel>,
+  ev: PositionEvent,
+): Map<string, Vessel> {
+  const existing = prev.get(ev.mmsi);
+  const base = existing ?? emptyVessel(ev.mmsi);
+  if (!isNewer(ev.occurredAt, base.occurredAt)) {
+    return prev as Map<string, Vessel>;
+  }
+  const next = new Map(prev);
+  next.set(ev.mmsi, {
+    ...base,
+    lat: ev.lat,
+    lon: ev.lon,
+    sog: ev.sog ?? null,
+    cog: ev.cog ?? null,
+    trueHeading: ev.trueHeading ?? null,
+    navStatus: ev.navStatus ?? null,
+    occurredAt: ev.occurredAt,
+    name: preferNonNull(ev.shipName, base.name),
+  });
+  return next;
+}
+
+export function applyStatic(
+  prev: ReadonlyMap<string, Vessel>,
+  ev: StaticEvent,
+): Map<string, Vessel> {
+  const base = prev.get(ev.mmsi) ?? emptyVessel(ev.mmsi);
+  const next = new Map(prev);
+  // Static events upsert profile fields by mmsi; create stub when unknown.
+  // Timestamp guard applies to profile-occurred-at, not position-occurred-at.
+  const accept = isNewer(ev.occurredAt, base.staticOccurredAt);
+  next.set(ev.mmsi, {
+    ...base,
+    imo: accept ? preferNonNull(ev.imo, base.imo) : base.imo,
+    name: accept ? preferNonNull(ev.name, base.name) : base.name,
+    callSign: accept ? preferNonNull(ev.callSign, base.callSign) : base.callSign,
+    shipType: accept ? preferNonNull(ev.shipType, base.shipType) : base.shipType,
+    destination: accept ? preferNonNull(ev.destination, base.destination) : base.destination,
+    staticOccurredAt: accept ? ev.occurredAt : base.staticOccurredAt,
+  });
+  return next;
+}
+
+export function applyEnriched(
+  prev: ReadonlyMap<string, Vessel>,
+  ev: VesselEnrichedEvent,
+): Map<string, Vessel> {
+  const base = prev.get(ev.mmsi) ?? emptyVessel(ev.mmsi);
+  if (base.sanctionsCheckedAt && Date.parse(ev.checkedAt) < Date.parse(base.sanctionsCheckedAt)) {
+    return prev as Map<string, Vessel>;
+  }
+  const next = new Map(prev);
+  next.set(ev.mmsi, {
+    ...base,
+    vesselId: ev.vesselId,
+    sanctionsStatus: ev.status,
+    sanctionsCheckedAt: ev.checkedAt,
+  });
+  return next;
+}

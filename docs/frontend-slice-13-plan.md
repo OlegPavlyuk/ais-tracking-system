@@ -70,14 +70,14 @@ proxy to the existing Docker backend on `:3000` (no backend CORS work).
 
 ### Phase 2 — Core building blocks (no map yet)
 
-- [ ] 2.1 `web/src/lib/protocol.ts`: build `ServerMessageSchema` discriminated union from `@contracts`.
-- [ ] 2.2 `web/src/lib/coverageBbox.ts`: parse `VITE_SUPPORTED_BBOX` (`minLon,minLat,maxLon,maxLat`) with a sane fallback.
-- [ ] 2.3 `web/src/store/mergeReducer.ts`: pure timestamp-guarded merge functions (testable in isolation).
-- [ ] 2.4 `web/src/store/vessels.ts`: Zustand store with state + actions (`applySnapshot`, `applyPosition`, `applyStatic`, `applyEnriched`, `setStatus`, `setError`).
-- [ ] 2.5 `web/src/api/client.ts`: `fetchSnapshot(bbox, signal)`; throws typed `ApiError` carrying `{ code, message, details }`.
-- [ ] 2.6 `web/src/lib/backoff.ts`: pure `nextBackoffMs(attempt)` mirroring backend curve + jitter + cap.
-- [ ] 2.7 `web/src/hooks/useDebouncedBbox.ts`: 300ms trailing debounce.
-- [ ] 2.8 `web/src/lib/wsClient.ts`: WS wrapper - URL built from `window.location` (ws/wss); subscribe; update_subscription; Zod-validate inbound; reconnect with backoff; track `disconnectedAt`; onResync callback when outage > 5s.
+- [x] 2.1 `web/src/lib/protocol.ts`: build `ServerMessageSchema` discriminated union from `@contracts`.
+- [x] 2.2 `web/src/lib/coverageBbox.ts`: parse `VITE_SUPPORTED_BBOX` (`minLon,minLat,maxLon,maxLat`) with a sane fallback.
+- [x] 2.3 `web/src/store/mergeReducer.ts`: pure timestamp-guarded merge functions (testable in isolation).
+- [x] 2.4 `web/src/store/vessels.ts`: Zustand store with state + actions (`applySnapshot`, `applyPosition`, `applyStatic`, `applyEnriched`, `setStatus`, `setError`).
+- [x] 2.5 `web/src/api/client.ts`: `fetchSnapshot(bbox, signal)`; throws typed `ApiError` carrying `{ code, message, details }`.
+- [x] 2.6 `web/src/lib/backoff.ts`: pure `nextBackoffMs(attempt)` mirroring backend curve + jitter + cap.
+- [x] 2.7 `web/src/hooks/useDebouncedBbox.ts`: 300ms trailing debounce.
+- [x] 2.8 `web/src/lib/wsClient.ts`: WS wrapper - URL built from `window.location` (ws/wss); subscribe; update_subscription; Zod-validate inbound; reconnect with backoff; track `disconnectedAt`; onResync callback when outage > 5s.
 
 ### Phase 3 — Map + integration
 
@@ -149,5 +149,11 @@ Acceptance criteria are in `docs/issues.md` under slice #13. The plan
 document maps every decision back to those criteria; if you find a gap,
 flag it before coding.
 
-Phase 1 is already committed (scaffold, deps, aliases, Tailwind, proxy,
-root `web:dev`/`web:build` scripts). Start with Phase 2.
+Phases 1 and 2 are already committed:
+- Phase 1: scaffold, deps, aliases, Tailwind, proxy, root scripts.
+- Phase 2: protocol Zod schema, coverage bbox helpers, merge reducer,
+  Zustand store, REST client, backoff, debounced-bbox hook, WS client.
+  Map/components are stub placeholders to keep typecheck green; Phase 3
+  replaces them.
+
+Start with Phase 3.
