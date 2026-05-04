@@ -81,12 +81,12 @@ proxy to the existing Docker backend on `:3000` (no backend CORS work).
 
 ### Phase 3 — Map + integration
 
-- [ ] 3.1 `web/src/map/MapView.tsx`: MapLibre init from `VITE_MAP_STYLE_URL`; `fitBounds(supportedBbox, { padding: 40, duration: 0 })`; register `vessel-default` icon (inline SVG); add `vessels` GeoJSON source + symbol layer; add coverage-area outline layer.
-- [ ] 3.2 `web/src/map/useVesselsLayer.ts`: subscribe to store; rAF/100ms-batched `source.setData(buildFC(vessels))`.
-- [ ] 3.3 `web/src/map/useViewportSync.ts`: `moveend`/`zoomend` -> debounced bbox -> WS `update_subscription` + REST significance check.
-- [ ] 3.4 `web/src/App.tsx`: orchestrate Q23 bootstrap (after map `load`: open WS + subscribe AND fire REST snapshot in parallel).
-- [ ] 3.5 `web/src/components/StatusPill.tsx`: connection indicator.
-- [ ] 3.6 `web/src/components/CoverageBanner.tsx`: non-modal banner driven by `error.code === 'BBOX_OUT_OF_SCOPE'`.
+- [x] 3.1 `web/src/map/MapView.tsx`: MapLibre init from `VITE_MAP_STYLE_URL`; `fitBounds(supportedBbox, { padding: 40, duration: 0 })`; register `vessel-default` icon (inline SVG); add `vessels` GeoJSON source + symbol layer; add coverage-area outline layer.
+- [x] 3.2 `web/src/map/useVesselsLayer.ts`: subscribe to store; rAF/100ms-batched `source.setData(buildFC(vessels))`.
+- [x] 3.3 `web/src/map/useViewportSync.ts`: `moveend`/`zoomend` -> debounced bbox -> WS `update_subscription` + REST significance check.
+- [x] 3.4 `web/src/App.tsx`: orchestrate Q23 bootstrap (after map `load`: open WS + subscribe AND fire REST snapshot in parallel).
+- [x] 3.5 `web/src/components/StatusPill.tsx`: connection indicator.
+- [x] 3.6 `web/src/components/CoverageBanner.tsx`: non-modal banner driven by `error.code === 'BBOX_OUT_OF_SCOPE'`.
 
 ### Phase 4 — Tests
 
@@ -149,11 +149,16 @@ Acceptance criteria are in `docs/issues.md` under slice #13. The plan
 document maps every decision back to those criteria; if you find a gap,
 flag it before coding.
 
-Phases 1 and 2 are already committed:
+Phases 1, 2, and 3 are already committed:
 - Phase 1: scaffold, deps, aliases, Tailwind, proxy, root scripts.
 - Phase 2: protocol Zod schema, coverage bbox helpers, merge reducer,
   Zustand store, REST client, backoff, debounced-bbox hook, WS client.
-  Map/components are stub placeholders to keep typecheck green; Phase 3
-  replaces them.
+- Phase 3: MapView (MapLibre init, fitBounds, vessel-default icon,
+  vessels source+symbol layer, coverage outline), useVesselsLayer
+  (rAF/100ms-batched setData), useViewportSync (moveend/zoomend ->
+  store bbox), App orchestration (bootstrap WS + REST snapshot in
+  parallel; debounced bbox -> WS update + significance-gated REST
+  refetch with tolerance-based zoom check and area-ratio guard),
+  StatusPill, CoverageBanner.
 
-Start with Phase 3.
+Start with Phase 4 (tests).
