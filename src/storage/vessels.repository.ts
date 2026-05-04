@@ -1,7 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter, Histogram } from 'prom-client';
 import { sql } from 'drizzle-orm';
 import { DbService } from '../shared/db/db.service';
 import { Bbox } from '../shared/config/constants';
+import { DB_QUERY_DURATION_SECONDS, DB_WRITES_TOTAL } from '../shared/metrics/metric-names';
 import { PositionEvent, StaticEvent } from '../contracts';
 
 export interface VesselSnapshotRow {
@@ -75,7 +78,22 @@ export interface VesselDetailRow {
 
 @Injectable()
 export class VesselsRepository {
-  constructor(@Inject(DbService) private readonly dbs: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbs: DbService,
+    @InjectMetric(DB_QUERY_DURATION_SECONDS)
+    private readonly queryDuration: Histogram<'query'>,
+    @InjectMetric(DB_WRITES_TOTAL)
+    private readonly writes: Counter<'table'>,
+  ) {}
+
+  private async timed<T>(query: string, fn: () => Promise<T>): Promise<T> {
+    const end = this.queryDuration.startTimer({ query });
+    try {
+      return await fn();
+    } finally {
+      end();
+    }
+  }
 
   /**
    * Single transaction: upsert `vessels` (creating on first sight), upsert
@@ -85,7 +103,7 @@ export class VesselsRepository {
    */
   async upsertPosition(event: PositionEvent): Promise<void> {
     const db = this.dbs.db;
-    await db.transaction(async (tx) => {
+    await this.timed('vessels.upsertPosition', () => db.transaction(async (tx) => {
       const inserted = await tx.execute(sql`
         INSERT INTO vessels (mmsi, name, updated_at)
         VALUES (${event.mmsi}, ${event.shipName ?? null}, NOW())
@@ -142,10 +160,22 @@ export class VesselsRepository {
         )
         ON CONFLICT (vessel_id, occurred_at) DO NOTHING
       `);
-    });
+    }));
+    this.writes.inc({ table: 'vessels' });
+    this.writes.inc({ table: 'vessel_positions_latest' });
+    this.writes.inc({ table: 'vessel_positions_history' });
   }
 
   async findTrack(
+    vesselId: string,
+    from: Date,
+    to: Date,
+    simplifyMeters?: number,
+  ): Promise<TrackResult> {
+    return this.timed('vessels.findTrack', () => this.findTrackInner(vesselId, from, to, simplifyMeters));
+  }
+
+  private async findTrackInner(
     vesselId: string,
     from: Date,
     to: Date,
@@ -213,7 +243,7 @@ export class VesselsRepository {
    * IMO/dimensions previously learned from a Type 5.
    */
   async upsertProfile(event: StaticEvent): Promise<void> {
-    await this.dbs.db.execute(sql`
+    await this.timed('vessels.upsertProfile', () => this.dbs.db.execute(sql`
       INSERT INTO vessels (
         mmsi, imo, name, call_sign, ship_type, destination,
         dimension_to_bow, dimension_to_stern, dimension_to_port, dimension_to_starboard,
@@ -243,11 +273,16 @@ export class VesselsRepository {
             dimension_to_port      = COALESCE(EXCLUDED.dimension_to_port,      vessels.dimension_to_port),
             dimension_to_starboard = COALESCE(EXCLUDED.dimension_to_starboard, vessels.dimension_to_starboard),
             updated_at             = NOW()
-    `);
+    `));
+    this.writes.inc({ table: 'vessels' });
   }
 
   /** Snapshot of vessels in a bbox, joined to profile, filtered by `last_seen_at`. */
   async findInBbox(bbox: Bbox, sinceMs: number, limit: number): Promise<VesselSnapshotRow[]> {
+    return this.timed('vessels.findInBbox', () => this.findInBboxInner(bbox, sinceMs, limit));
+  }
+
+  private async findInBboxInner(bbox: Bbox, sinceMs: number, limit: number): Promise<VesselSnapshotRow[]> {
     const since = new Date(Date.now() - sinceMs).toISOString();
     const rows = await this.dbs.db.execute(sql`
       SELECT
@@ -277,6 +312,10 @@ export class VesselsRepository {
 
   /** Full vessel profile + current position, or null when the id is unknown. */
   async findById(id: string): Promise<VesselDetailRow | null> {
+    return this.timed('vessels.findById', () => this.findByIdInner(id));
+  }
+
+  private async findByIdInner(id: string): Promise<VesselDetailRow | null> {
     const rows = await this.dbs.db.execute(sql`
       SELECT
         v.id,

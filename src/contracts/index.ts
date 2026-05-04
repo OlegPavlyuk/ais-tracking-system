@@ -22,6 +22,7 @@ export const PositionEventSchema = z.object({
   occurredAt: z.string().datetime({ offset: true }),
   provider: z.string().min(1),
   ingestedAt: z.string().datetime({ offset: true }),
+  traceId: z.string().uuid().optional(),
 });
 export type PositionEvent = z.infer<typeof PositionEventSchema>;
 
@@ -41,6 +42,7 @@ export const StaticEventSchema = z.object({
   occurredAt: z.string().datetime({ offset: true }),
   provider: z.string().min(1),
   ingestedAt: z.string().datetime({ offset: true }),
+  traceId: z.string().uuid().optional(),
 });
 export type StaticEvent = z.infer<typeof StaticEventSchema>;
 
@@ -75,5 +77,6 @@ export const VesselEnrichedEventSchema = z.object({
   status: z.enum(['clear', 'candidate', 'sanctioned']),
   matches: z.array(SanctionMatchSchema),
   checkedAt: z.string().datetime({ offset: true }),
+  traceId: z.string().uuid().optional(),
 });
 export type VesselEnrichedEvent = z.infer<typeof VesselEnrichedEventSchema>;

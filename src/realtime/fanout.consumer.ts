@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import { CanonicalEventSchema, VesselEnrichedEventSchema } from '../contracts';
 import { EVENT_BUS, EventBus } from '../shared/bus/event-bus';
 import { AIS_EVENTS_STREAM, VESSEL_ENRICHED_STREAM } from '../shared/config/constants';
@@ -16,7 +17,10 @@ export class FanoutConsumer implements OnModuleInit {
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     private readonly subs: SubscriptionService,
     private readonly gateway: RealtimeGateway,
-  ) {}
+    private readonly pino: PinoLogger,
+  ) {
+    this.pino.setContext(FanoutConsumer.name);
+  }
 
   async onModuleInit(): Promise<void> {
     const consumer = `realtime-fanout-${process.pid}`;
@@ -36,6 +40,17 @@ export class FanoutConsumer implements OnModuleInit {
           this.gateway.enqueue(id, { type: 'static', data: event });
         }
       }
+      this.pino.debug(
+        {
+          traceId: event.traceId,
+          mmsi: event.mmsi,
+          provider: event.provider,
+          kind: event.kind,
+          streamMessageId: msg.id,
+          consumerGroup: CONSUMER_GROUP,
+        },
+        'fanout',
+      );
     });
     this.logger.log(`subscribed to ${AIS_EVENTS_STREAM} group=${CONSUMER_GROUP} consumer=${consumer}`);
 

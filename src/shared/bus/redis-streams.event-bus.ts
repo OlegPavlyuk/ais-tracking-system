@@ -1,8 +1,17 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter, Histogram } from 'prom-client';
+import { PinoLogger } from 'nestjs-pino';
 import Redis from 'ioredis';
 import { ConfigService } from '../config/config.service';
 import { RedisService } from '../redis/redis.service';
 import { AIS_DEADLETTER_STREAM } from '../config/constants';
+import { correlationFromPayload } from '../logger/correlation';
+import {
+  AIS_DEADLETTER_TOTAL,
+  AIS_STREAM_HANDLER_DURATION_SECONDS,
+  AIS_STREAM_HANDLER_ERRORS_TOTAL,
+} from '../metrics/metric-names';
 import { EventBus, EventBusHandler } from './event-bus';
 import { FailureHandler, serializeError } from './failure-handler';
 
@@ -29,7 +38,16 @@ export class RedisStreamsEventBus implements EventBus, OnModuleDestroy {
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(FailureHandler) private readonly failures: FailureHandler,
-  ) {}
+    @InjectMetric(AIS_STREAM_HANDLER_DURATION_SECONDS)
+    private readonly handlerDuration: Histogram<'stream' | 'group'>,
+    @InjectMetric(AIS_STREAM_HANDLER_ERRORS_TOTAL)
+    private readonly handlerErrors: Counter<'stream' | 'group'>,
+    @InjectMetric(AIS_DEADLETTER_TOTAL)
+    private readonly deadletterTotal: Counter<'stream' | 'reason'>,
+    private readonly pino: PinoLogger,
+  ) {
+    this.pino.setContext(RedisStreamsEventBus.name);
+  }
 
   async publish<T>(stream: string, payload: T): Promise<string> {
     const maxLen = this.config.get('STREAM_MAXLEN');
@@ -187,12 +205,33 @@ export class RedisStreamsEventBus implements EventBus, OnModuleDestroy {
       await this.deadletterMalformed(loop, id, dataValue, err);
       return;
     }
+    const corr = correlationFromPayload(payload);
+    const logBindings = {
+      stream: loop.stream,
+      consumerGroup: loop.group,
+      streamMessageId: id,
+      ...corr,
+    };
+    this.pino.debug(logBindings, 'dispatch');
+    const endTimer = this.handlerDuration.startTimer({
+      stream: loop.stream,
+      group: loop.group,
+    });
     let action: Awaited<ReturnType<FailureHandler['onHandlerError']>> | null = null;
+    let handlerErr: unknown = null;
     try {
       await loop.handler({ id, payload });
+      endTimer();
       await loop.client.xack(loop.stream, loop.group, id);
       return;
-    } catch (handlerErr) {
+    } catch (err) {
+      handlerErr = err;
+      endTimer();
+      this.handlerErrors.inc({ stream: loop.stream, group: loop.group });
+      this.pino.warn(
+        { ...logBindings, err: (err as Error).message },
+        'handler error',
+      );
       try {
         action = await this.failures.onHandlerError({
           stream: loop.stream,
@@ -209,6 +248,7 @@ export class RedisStreamsEventBus implements EventBus, OnModuleDestroy {
       }
     }
     if (action && action.action === 'deadletter-and-ack') {
+      this.deadletterTotal.inc({ stream: loop.stream, reason: 'handler-error' });
       await loop.client.xack(loop.stream, loop.group, id);
     }
   }
@@ -242,6 +282,7 @@ export class RedisStreamsEventBus implements EventBus, OnModuleDestroy {
         'data',
         JSON.stringify(dlqPayload),
       );
+      this.deadletterTotal.inc({ stream: loop.stream, reason: 'invalid-json' });
       this.logger.error(
         `DLQ invalid-json stream=${loop.stream} group=${loop.group} id=${id}: ${dlqPayload.error.message}`,
       );

@@ -2,6 +2,7 @@ import { StorageWriterConsumer } from './storage-writer.consumer';
 import { EventBus, EventBusHandler } from '../shared/bus/event-bus';
 import { VesselsRepository } from './vessels.repository';
 import { PositionEvent, StaticEvent, SCHEMA_VERSION } from '../contracts';
+import { stubPinoLogger } from '../shared/testing/metrics-stubs';
 
 describe('StorageWriterConsumer', () => {
   function makeEvent(overrides: Partial<PositionEvent> = {}): PositionEvent {
@@ -58,7 +59,7 @@ describe('StorageWriterConsumer', () => {
       upsertProfile: jest.fn().mockResolvedValue(undefined),
     } as unknown as VesselsRepository;
 
-    const consumer = new StorageWriterConsumer(bus, repo);
+    const consumer = new StorageWriterConsumer(bus, repo, stubPinoLogger());
     await consumer.onModuleInit();
 
     const event = makeEvent();
@@ -80,7 +81,7 @@ describe('StorageWriterConsumer', () => {
       upsertProfile: jest.fn().mockResolvedValue(undefined),
     } as unknown as VesselsRepository;
 
-    const consumer = new StorageWriterConsumer(bus, repo);
+    const consumer = new StorageWriterConsumer(bus, repo, stubPinoLogger());
     await consumer.onModuleInit();
 
     const event = makeStaticEvent();
@@ -99,7 +100,7 @@ describe('StorageWriterConsumer', () => {
     };
     const repo = { upsertPosition: jest.fn() } as unknown as VesselsRepository;
 
-    const consumer = new StorageWriterConsumer(bus, repo);
+    const consumer = new StorageWriterConsumer(bus, repo, stubPinoLogger());
     await consumer.onModuleInit();
 
     await captured!({ id: '1-0', payload: { kind: 'position', schemaVersion: SCHEMA_VERSION, mmsi: 'bad' } });

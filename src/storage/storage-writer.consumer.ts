@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import { EVENT_BUS, EventBus } from '../shared/bus/event-bus';
 import { AIS_EVENTS_STREAM } from '../shared/config/constants';
 import { CanonicalEventSchema } from '../contracts';
@@ -13,7 +14,10 @@ export class StorageWriterConsumer implements OnModuleInit {
   constructor(
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     private readonly repo: VesselsRepository,
-  ) {}
+    private readonly pino: PinoLogger,
+  ) {
+    this.pino.setContext(StorageWriterConsumer.name);
+  }
 
   async onModuleInit(): Promise<void> {
     const consumer = `storage-writer-${process.pid}`;
@@ -29,6 +33,17 @@ export class StorageWriterConsumer implements OnModuleInit {
       } else {
         await this.repo.upsertProfile(event);
       }
+      this.pino.debug(
+        {
+          traceId: event.traceId,
+          mmsi: event.mmsi,
+          provider: event.provider,
+          kind: event.kind,
+          streamMessageId: msg.id,
+          consumerGroup: CONSUMER_GROUP,
+        },
+        'wrote',
+      );
     });
     this.logger.log(`subscribed to ${AIS_EVENTS_STREAM} group=${CONSUMER_GROUP} consumer=${consumer}`);
   }

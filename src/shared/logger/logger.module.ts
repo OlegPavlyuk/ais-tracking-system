@@ -13,7 +13,9 @@ import { ConfigService } from '../config/config.service';
         return {
           pinoHttp: {
             level: config.get('LOG_LEVEL'),
-            // Correlation field placeholders — populated by middleware/consumers later.
+            // Correlation fields (traceId/mmsi/vesselId/streamMessageId/
+            // consumerGroup/provider) are bound on per-event log lines along
+            // the AIS path via PinoLogger child contexts; see slice #12.
             base: {
               service: 'ais-tracking-system',
               role: config.get('PROCESS_ROLE'),
@@ -21,14 +23,6 @@ import { ConfigService } from '../config/config.service';
             transport: isDev
               ? { target: 'pino-pretty', options: { singleLine: true, colorize: true } }
               : undefined,
-            customProps: () => ({
-              traceId: undefined,
-              mmsi: undefined,
-              vesselId: undefined,
-              streamMessageId: undefined,
-              consumerGroup: undefined,
-              provider: undefined,
-            }),
           },
         };
       },

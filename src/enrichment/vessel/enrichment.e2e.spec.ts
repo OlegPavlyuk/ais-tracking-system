@@ -11,6 +11,7 @@ import { SanctionCandidate } from './matcher';
 import { VESSEL_ENRICHED_STREAM } from '../../shared/config/constants';
 import { ConfigService } from '../../shared/config/config.service';
 import { EventBus } from '../../shared/bus/event-bus';
+import { stubCounter, stubPinoLogger } from '../../shared/testing/metrics-stubs';
 
 describe('enrichment loop (dispatcher + processor)', () => {
   it('discovers vessel → enqueues job → matcher fires on IMO → publishes vessel.enriched and sets cache keys', async () => {
@@ -62,6 +63,7 @@ describe('enrichment loop (dispatcher + processor)', () => {
       queue as never,
       redis as never,
       repo,
+      stubPinoLogger(),
       undefined,
     );
 
@@ -100,7 +102,15 @@ describe('enrichment loop (dispatcher + processor)', () => {
       get: jest.fn((k: string) => (k === 'ENRICHMENT_STALENESS_SECONDS' ? 604800 : undefined)),
     } as unknown as ConfigService;
 
-    const processor = new EnrichmentProcessor(repo, bus, redis as never, config);
+    const processor = new EnrichmentProcessor(
+      repo,
+      bus,
+      redis as never,
+      config,
+      stubCounter(),
+      stubCounter(),
+      stubPinoLogger(),
+    );
     const job = { id: 'job-1', data: enq.data } as unknown as Job<EnrichmentJobData>;
     const result = await processor.process(job);
 
@@ -152,7 +162,15 @@ describe('enrichment loop (dispatcher + processor)', () => {
       get: jest.fn(() => 604800),
     } as unknown as ConfigService;
 
-    const processor = new EnrichmentProcessor(repo, bus, redis as never, config);
+    const processor = new EnrichmentProcessor(
+      repo,
+      bus,
+      redis as never,
+      config,
+      stubCounter(),
+      stubCounter(),
+      stubPinoLogger(),
+    );
     const data: EnrichmentJobData = {
       vesselId: 'v-2',
       mmsi: vessel.mmsi,

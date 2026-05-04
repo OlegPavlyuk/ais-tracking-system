@@ -1,4 +1,5 @@
 import { CanonicalEvent } from '../../contracts';
+import { stubPinoLogger } from '../../shared/testing/metrics-stubs';
 import {
   EnrichmentDispatcher,
   ENRICHMENT_VESSEL_QUEUE,
@@ -77,7 +78,7 @@ describe('EnrichmentDispatcher.handle', () => {
     const queue = makeQueue();
     const redis = makeRedis();
     const repo = makeRepo({});
-    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never);
+    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never, stubPinoLogger());
 
     await d.handle(positionEvent());
     expect(queue.add).not.toHaveBeenCalled();
@@ -91,7 +92,7 @@ describe('EnrichmentDispatcher.handle', () => {
       'enrich:checked:v-1': '1',
     });
     const queue = makeQueue();
-    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never);
+    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never, stubPinoLogger());
 
     await d.handle(positionEvent());
     expect(queue.add).not.toHaveBeenCalled();
@@ -101,7 +102,7 @@ describe('EnrichmentDispatcher.handle', () => {
     const repo = makeRepo({ '572469210': { id: 'v-1', imo: '9187629', name: 'ARTAVIL' } });
     const redis = makeRedis();
     const queue = makeQueue();
-    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never);
+    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never, stubPinoLogger());
 
     await d.handle(positionEvent());
     expect(queue.add).toHaveBeenCalledTimes(1);
@@ -120,7 +121,7 @@ describe('EnrichmentDispatcher.handle', () => {
     const profileHash = profileHashFor({ imo: '9187629', name: 'ARTAVIL' });
     const redis = makeRedis({ 'enrich:profile:v-1': profileHash });
     const queue = makeQueue();
-    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never);
+    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never, stubPinoLogger());
 
     await d.handle(positionEvent());
     expect(queue.add).toHaveBeenCalledTimes(1);
@@ -137,7 +138,7 @@ describe('EnrichmentDispatcher.handle', () => {
       'enrich:checked:v-1': '1',
     });
     const queue = makeQueue();
-    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never);
+    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never, stubPinoLogger());
 
     await d.handle(staticEvent({ imo: '9187629', name: 'ARTAVIL' } as Partial<CanonicalEvent>));
     expect(queue.add).toHaveBeenCalledTimes(1);
@@ -154,7 +155,7 @@ describe('EnrichmentDispatcher.handle', () => {
       'enrich:checked:v-1': '1',
     });
     const queue = makeQueue();
-    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never);
+    const d = new EnrichmentDispatcher(queue as never, redis as never, repo as never, stubPinoLogger());
 
     await d.handle(staticEvent());
     expect(queue.add).not.toHaveBeenCalled();

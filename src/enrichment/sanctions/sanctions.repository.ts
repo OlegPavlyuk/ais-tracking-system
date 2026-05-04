@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter } from 'prom-client';
 import { sql } from 'drizzle-orm';
 import { DbService } from '../../shared/db/db.service';
+import { DB_WRITES_TOTAL } from '../../shared/metrics/metric-names';
 import { VesselEntity } from './sanctions-source.adapter';
 
 export interface SanctionsImportRunRow {
@@ -15,7 +18,11 @@ export interface SanctionsImportRunRow {
 
 @Injectable()
 export class SanctionsRepository {
-  constructor(@Inject(DbService) private readonly dbs: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbs: DbService,
+    @InjectMetric(DB_WRITES_TOTAL)
+    private readonly writes: Counter<'table'>,
+  ) {}
 
   async startRun(source: string): Promise<number> {
     const rows = await this.dbs.db.execute(sql`
@@ -77,6 +84,7 @@ export class SanctionsRepository {
         `);
       }
     });
+    this.writes.inc({ table: 'sanctioned_entities' }, batch.length);
   }
 
   async findRecentRuns(limit: number): Promise<SanctionsImportRunRow[]> {

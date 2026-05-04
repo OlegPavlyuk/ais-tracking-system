@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter, Histogram } from 'prom-client';
 import { sql } from 'drizzle-orm';
 import { DbService } from '../../shared/db/db.service';
+import { DB_QUERY_DURATION_SECONDS, DB_WRITES_TOTAL } from '../../shared/metrics/metric-names';
 import { SanctionCandidate, SanctionMatch, SanctionsStatus } from './matcher';
 
 export interface VesselFingerprint {
@@ -20,7 +23,22 @@ export interface ApplyEnrichmentInput {
 
 @Injectable()
 export class EnrichmentRepository {
-  constructor(@Inject(DbService) private readonly dbs: DbService) {}
+  constructor(
+    @Inject(DbService) private readonly dbs: DbService,
+    @InjectMetric(DB_QUERY_DURATION_SECONDS)
+    private readonly queryDuration: Histogram<'query'>,
+    @InjectMetric(DB_WRITES_TOTAL)
+    private readonly writes: Counter<'table'>,
+  ) {}
+
+  private async timed<T>(query: string, fn: () => Promise<T>): Promise<T> {
+    const end = this.queryDuration.startTimer({ query });
+    try {
+      return await fn();
+    } finally {
+      end();
+    }
+  }
 
   async findVesselFingerprintByMmsi(mmsi: string): Promise<VesselFingerprint | null> {
     const rows = await this.dbs.db.execute(sql`
@@ -40,6 +58,10 @@ export class EnrichmentRepository {
   }
 
   async loadAllSanctionCandidates(): Promise<SanctionCandidate[]> {
+    return this.timed('enrichment.loadSanctionCandidates', () => this.loadAllSanctionCandidatesInner());
+  }
+
+  private async loadAllSanctionCandidatesInner(): Promise<SanctionCandidate[]> {
     const rows = await this.dbs.db.execute(sql`
       SELECT
         id,
@@ -75,19 +97,23 @@ export class EnrichmentRepository {
    * Freshness-guarded write: only applies when the row hasn't been checked by a newer job.
    */
   async applyEnrichment(input: ApplyEnrichmentInput): Promise<number> {
-    const result = await this.dbs.db.execute(sql`
-      UPDATE vessels
-        SET sanctions_status = ${input.status},
-            sanctions_checked_at = ${input.checkedAt},
-            sanctions_matches = ${JSON.stringify(input.matches)}::jsonb,
-            updated_at = NOW()
-      WHERE id = ${input.vesselId}
-        AND (
-          sanctions_checked_at IS NULL
-          OR sanctions_checked_at < ${input.checkedAt}
-        )
-    `);
-    const r = result as unknown as { rowCount?: number; count?: number; length?: number };
-    return r.rowCount ?? r.count ?? r.length ?? 0;
+    const updated = await this.timed('enrichment.applyEnrichment', async () => {
+      const result = await this.dbs.db.execute(sql`
+        UPDATE vessels
+          SET sanctions_status = ${input.status},
+              sanctions_checked_at = ${input.checkedAt},
+              sanctions_matches = ${JSON.stringify(input.matches)}::jsonb,
+              updated_at = NOW()
+        WHERE id = ${input.vesselId}
+          AND (
+            sanctions_checked_at IS NULL
+            OR sanctions_checked_at < ${input.checkedAt}
+          )
+      `);
+      const r = result as unknown as { rowCount?: number; count?: number; length?: number };
+      return r.rowCount ?? r.count ?? r.length ?? 0;
+    });
+    if (updated > 0) this.writes.inc({ table: 'vessels' });
+    return updated;
   }
 }

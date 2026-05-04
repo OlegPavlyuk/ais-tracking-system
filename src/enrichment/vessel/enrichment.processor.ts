@@ -1,11 +1,18 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter } from 'prom-client';
+import { PinoLogger } from 'nestjs-pino';
 import { Job } from 'bullmq';
 import Redis from 'ioredis';
 import { SCHEMA_VERSION, VesselEnrichedEvent } from '../../contracts';
 import { EVENT_BUS, EventBus } from '../../shared/bus/event-bus';
 import { VESSEL_ENRICHED_STREAM } from '../../shared/config/constants';
 import { ConfigService } from '../../shared/config/config.service';
+import {
+  ENRICHMENT_JOBS_TOTAL,
+  SANCTIONS_MATCHES_TOTAL,
+} from '../../shared/metrics/metric-names';
 import {
   ENRICHMENT_REDIS,
   ENRICHMENT_VESSEL_QUEUE,
@@ -26,15 +33,25 @@ export class EnrichmentProcessor extends WorkerHost {
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @Inject(ENRICHMENT_REDIS) private readonly redis: Pick<Redis, 'set' | 'expire'>,
     @Inject(ConfigService) private readonly config: ConfigService,
+    @InjectMetric(ENRICHMENT_JOBS_TOTAL)
+    private readonly jobsCounter: Counter<'status'>,
+    @InjectMetric(SANCTIONS_MATCHES_TOTAL)
+    private readonly matchesCounter: Counter<'match_type'>,
+    private readonly pino: PinoLogger,
   ) {
     super();
+    this.pino.setContext(EnrichmentProcessor.name);
   }
 
   async process(job: Job<EnrichmentJobData>): Promise<{ status: string; matches: number }> {
-    const { vesselId, mmsi } = job.data;
+    const { vesselId, mmsi, traceId } = job.data;
     const fingerprint = await this.repo.findVesselFingerprintByMmsi(mmsi);
     if (!fingerprint || fingerprint.id !== vesselId) {
-      this.logger.warn(`vessel ${vesselId} (mmsi=${mmsi}) not resolvable; skipping`);
+      this.pino.warn(
+        { vesselId, mmsi, traceId },
+        'vessel not resolvable; skipping',
+      );
+      this.jobsCounter.inc({ status: 'skipped' });
       return { status: 'skipped', matches: 0 };
     }
 
@@ -53,9 +70,18 @@ export class EnrichmentProcessor extends WorkerHost {
     });
 
     if (updated === 0) {
-      this.logger.debug?.(`enrichment guard skipped update for vessel=${vesselId}`);
+      this.pino.debug(
+        { vesselId, mmsi, traceId },
+        'enrichment guard skipped update',
+      );
+      this.jobsCounter.inc({ status: 'noop' });
       return { status: 'noop', matches: result.matches.length };
     }
+
+    for (const m of result.matches) {
+      this.matchesCounter.inc({ match_type: m.matchMethod });
+    }
+    this.jobsCounter.inc({ status: result.status });
 
     const enriched: VesselEnrichedEvent = {
       schemaVersion: SCHEMA_VERSION,
@@ -64,6 +90,7 @@ export class EnrichmentProcessor extends WorkerHost {
       status: result.status,
       matches: result.matches,
       checkedAt,
+      ...(traceId ? { traceId } : {}),
     };
     await this.bus.publish(VESSEL_ENRICHED_STREAM, enriched);
 
@@ -72,8 +99,15 @@ export class EnrichmentProcessor extends WorkerHost {
     await this.redis.set(profileKey(vesselId), cachedHash);
     await this.redis.set(checkedKey(vesselId), checkedAt, 'EX', ttl);
 
-    this.logger.log(
-      `enriched vessel=${vesselId} mmsi=${mmsi} status=${result.status} matches=${result.matches.length}`,
+    this.pino.info(
+      {
+        vesselId,
+        mmsi,
+        traceId,
+        status: result.status,
+        matches: result.matches.length,
+      },
+      'enriched',
     );
     return { status: result.status, matches: result.matches.length };
   }

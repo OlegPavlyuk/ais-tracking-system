@@ -48,6 +48,26 @@ The single Nest image boots into one of four roles via `PROCESS_ROLE`:
 - `ingestion` — AIS provider → pipeline → storage writer
 - `worker` — enrichment + sanctions ETL
 
+## Observability
+
+Prometheus scrapes `/metrics`; Grafana auto-loads the
+[`AIS Tracking System` dashboard](docker/grafana/provisioning/dashboards/files/ais-tracking.json)
+on `docker compose up`. Panels cover ingestion rate, drop reasons, provider
+health, stream lag/pending, handler p95 latency, DLQ rate, DB writes, sanctions
+matches, WS activity, and HTTP latency.
+
+Logs are JSON via pino. Each canonical AIS event is tagged with a `traceId` at
+publish time and carried through every consumer (storage, realtime fanout,
+enrichment dispatcher, enrichment processor) so a single event can be followed
+end-to-end:
+
+```bash
+docker compose logs app | jq 'select(.traceId == "<uuid>")'
+```
+
+A reference screenshot lives at [`docs/dashboard.png`](docs/dashboard.png) once
+captured against a live run.
+
 ## Scripts
 
 - `pnpm start:dev` — watch-mode start

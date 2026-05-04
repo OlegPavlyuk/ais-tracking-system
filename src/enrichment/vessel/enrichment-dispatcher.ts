@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { CanonicalEvent, CanonicalEventSchema } from '../../contracts';
@@ -23,6 +24,8 @@ export interface EnrichmentJobData {
   profileHash: string;
   observedImo: string | null;
   observedName: string | null;
+  /** Originating canonical-event traceId, for end-to-end log correlation. */
+  traceId?: string;
 }
 
 interface ProfileFingerprint {
@@ -46,8 +49,11 @@ export class EnrichmentDispatcher implements OnModuleInit {
     @InjectQueue(ENRICHMENT_VESSEL_QUEUE) private readonly queue: Queue<EnrichmentJobData>,
     @Inject('ENRICHMENT_REDIS') private readonly redis: Pick<Redis, 'get'>,
     @Inject(EnrichmentRepository) private readonly repo: EnrichmentRepository,
+    private readonly pino: PinoLogger,
     @Inject(EVENT_BUS) private readonly bus?: EventBus,
-  ) {}
+  ) {
+    this.pino.setContext(EnrichmentDispatcher.name);
+  }
 
   async onModuleInit(): Promise<void> {
     if (!this.bus) return;
@@ -88,10 +94,22 @@ export class EnrichmentDispatcher implements OnModuleInit {
         profileHash: candidateHash,
         observedImo: candidate.imo,
         observedName: candidate.name,
+        traceId: event.traceId,
       },
       { jobId, removeOnComplete: 200, removeOnFail: 200 },
     );
-    this.logger.debug?.(`enqueued ${jobId}`);
+    this.pino.debug(
+      {
+        traceId: event.traceId,
+        mmsi: event.mmsi,
+        vesselId: vessel.id,
+        provider: event.provider,
+        consumerGroup: CONSUMER_GROUP,
+        trigger,
+        jobId,
+      },
+      'enqueued enrichment job',
+    );
   }
 
   private candidateProfile(event: CanonicalEvent, vessel: VesselFingerprint): ProfileFingerprint {

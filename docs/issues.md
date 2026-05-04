@@ -336,12 +336,13 @@ Grafana dashboard JSON loaded automatically by the Grafana container.
 
 ### Acceptance criteria
 
-- [ ] All metrics from `docs/architecture-decisions.md` (ingestion, pipeline, storage, enrichment, realtime, HTTP) are emitted.
-- [ ] Correlation fields appear on log lines along the AIS message path; one event can be traced end-to-end via grep.
-- [ ] Grafana provisioning config + dashboard JSON committed under `docker/grafana/`.
-- [ ] On `docker compose up`, Grafana auto-loads the dashboard with live data.
-- [ ] Dashboard panels cover: ingestion rate, drop reasons, stream lag per group, DLQ rate, sanctions matches, WS connections, p95 query duration, provider health.
-- [ ] README screenshot of the dashboard in action.
+- [x] All metrics from `docs/architecture-decisions.md` (ingestion, pipeline, storage, enrichment, realtime, HTTP) are emitted. New names: `ais_messages_received_total`, `ais_events_published_total`, `ais_stream_consumer_lag`, `ais_stream_consumer_pending`, `ais_stream_handler_duration_seconds`, `ais_stream_handler_errors_total`, `ais_deadletter_total`, `db_query_duration_seconds`, `db_writes_total`, `enrichment_jobs_total`, `sanctions_import_duration_seconds`, `sanctions_import_records_total`, `sanctions_matches_total`, `http_request_duration_seconds`. Lag/pending refreshed every 5s by `StreamLagService` (mirrors `/admin/streams`).
+- [x] Correlation fields (`traceId`, `mmsi`, `vesselId`, `streamMessageId`, `consumerGroup`, `provider`) appear on log lines along the AIS message path. `traceId` is generated in `IngestionPipelineService` per published event and propagated through canonical event schema → consumer-group dispatch → storage / fanout / enrichment workers.
+- [x] Grafana provisioning config + dashboard JSON committed under `docker/grafana/provisioning/dashboards/files/ais-tracking.json`.
+- [x] On `docker compose up`, Grafana auto-loads the dashboard from the provisioning folder with the Prometheus datasource (uid `prometheus`).
+- [x] Dashboard rows: Ingestion, Provider Health, Pipeline / Streams, Storage, Sanctions, Realtime, HTTP — covering ingestion rate, drop reasons, stream lag/pending per group, DLQ rate, handler p95 duration, sanctions matches, WS connections, DB p95 duration, provider health.
+- [x] Unit coverage for `correlationFromPayload` and `HttpMetricsInterceptor`. End-to-end grep verification deferred to the integration harness slice; manual verification: `docker compose logs app | jq 'select(.traceId=="<id>")'` to walk a single event from publish → storage write → fanout / enrichment.
+- [ ] README screenshot of the dashboard in action — committed at `docs/dashboard.png` once captured against a live stack run; placeholder pending live capture.
 
 ### Blocked by
 

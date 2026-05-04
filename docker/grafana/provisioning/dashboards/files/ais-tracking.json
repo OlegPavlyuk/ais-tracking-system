@@ -1,0 +1,390 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "Ingestion",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Messages received per second (by provider)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (provider) (rate(ais_messages_received_total[1m]))",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Drops per second (by reason)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(ais_messages_dropped_total[1m]))",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Provider Health",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Provider connected",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } } }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "ais_provider_connected",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Last message age (s)",
+      "gridPos": { "h": 5, "w": 9, "x": 6, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "ais_provider_last_message_age_seconds",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider reconnects (rate)",
+      "gridPos": { "h": 5, "w": 9, "x": 15, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "rate(ais_provider_reconnects_total[5m])",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Pipeline / Streams",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Events published per second (by stream/kind)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (stream, kind) (rate(ais_events_published_total[1m]))",
+          "legendFormat": "{{stream}} / {{kind}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Consumer-group lag",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "ais_stream_consumer_lag",
+          "legendFormat": "{{stream}} / {{group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Consumer-group pending",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "ais_stream_consumer_pending",
+          "legendFormat": "{{stream}} / {{group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Stream handler p95 duration",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, stream, group) (rate(ais_stream_handler_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{stream}} / {{group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Handler errors / sec",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (stream, group) (rate(ais_stream_handler_errors_total[5m]))",
+          "legendFormat": "{{stream}} / {{group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Dead-letter rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (stream, reason) (rate(ais_deadletter_total[5m]))",
+          "legendFormat": "{{stream}} / {{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Storage",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "DB query p95 duration (by query)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, query) (rate(db_query_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{query}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DB writes / sec (by table)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (table) (rate(db_writes_total[1m]))",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Sanctions",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Sanctions matches / sec (by match_type)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (match_type) (rate(sanctions_matches_total[5m]))",
+          "legendFormat": "{{match_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Enrichment job outcomes / sec",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(enrichment_jobs_total[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Sanctions import duration p95 (by source)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 58 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, source) (rate(sanctions_import_duration_seconds_bucket[1h])))",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Sanctions records imported (total)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 58 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (source) (sanctions_import_records_total)",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Realtime",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Active WS connections",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 67 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "expr": "ws_connections_active", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "WS messages sent / sec (by kind)",
+      "gridPos": { "h": 8, "w": 9, "x": 6, "y": 67 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (kind) (rate(ws_messages_sent_total[1m]))",
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "WS messages dropped / sec (by reason)",
+      "gridPos": { "h": 8, "w": 9, "x": 15, "y": 67 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(ws_messages_dropped_total[1m]))",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "HTTP",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 75 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP request rate (by route)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 76 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (route, method) (rate(http_request_duration_seconds_count[1m]))",
+          "legendFormat": "{{method}} {{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP p95 latency (by route)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 76 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "preload": false,
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["ais", "observability"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "",
+  "title": "AIS Tracking System",
+  "uid": "ais-tracking-system",
+  "version": 1,
+  "weekStart": ""
+}

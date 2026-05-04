@@ -1,5 +1,6 @@
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { DbService } from '../../shared/db/db.service';
+import { stubCounter, stubHistogram } from '../../shared/testing/metrics-stubs';
 import { EnrichmentRepository } from './enrichment.repository';
 import { SanctionMatch } from './matcher';
 
@@ -45,7 +46,7 @@ describe('EnrichmentRepository.applyEnrichment', () => {
   it('emits a freshness-guarded UPDATE comparing sanctions_checked_at < checkedAt', async () => {
     const cap = captured();
     cap.setResult({ rowCount: 1 });
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec));
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
     await repo.applyEnrichment({
       vesselId: 'v-1',
       status: 'sanctioned',
@@ -68,7 +69,7 @@ describe('EnrichmentRepository.applyEnrichment', () => {
   it('returns rowCount=1 (first check, sanctions_checked_at IS NULL succeeds)', async () => {
     const cap = captured();
     cap.setResult({ rowCount: 1 });
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec));
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
     const updated = await repo.applyEnrichment({
       vesselId: 'v-1',
       status: 'clear',
@@ -81,7 +82,7 @@ describe('EnrichmentRepository.applyEnrichment', () => {
   it('returns rowCount=1 when newer checkedAt overwrites an older check', async () => {
     const cap = captured();
     cap.setResult({ rowCount: 1 });
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec));
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
     const updated = await repo.applyEnrichment({
       vesselId: 'v-1',
       status: 'sanctioned',
@@ -94,7 +95,7 @@ describe('EnrichmentRepository.applyEnrichment', () => {
   it('returns rowCount=0 when checkedAt is older or equal to the row (guard rejects)', async () => {
     const cap = captured();
     cap.setResult({ rowCount: 0 });
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec));
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
     const updated = await repo.applyEnrichment({
       vesselId: 'v-1',
       status: 'sanctioned',
