@@ -45,8 +45,9 @@ export function applySnapshotRows(
 
     merged.vesselId = row.id;
 
-    // Position fields: only overwrite when snapshot row's lastSeenAt is >= current occurredAt.
-    if (isNewer(row.lastSeenAt, base.occurredAt)) {
+    // Compare AIS event times (occurredAt). lastSeenAt is a DB write timestamp
+    // and would let a stale snapshot clobber a newer WS-derived position.
+    if (isNewer(row.occurredAt, base.occurredAt)) {
       merged.lat = row.lat;
       merged.lon = row.lon;
       merged.sog = row.sog;

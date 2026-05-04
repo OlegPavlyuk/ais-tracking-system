@@ -3,7 +3,7 @@ import maplibregl, { type Map as MlMap } from 'maplibre-gl';
 import { getSupportedBbox } from '@/lib/coverageBbox';
 import type { Bbox } from '@/lib/protocol';
 
-const FALLBACK_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
+const DEFAULT_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 const VESSEL_ICON_ID = 'vessel-default';
 const VESSELS_SOURCE_ID = 'vessels';
 const VESSELS_LAYER_ID = 'vessels';
@@ -27,7 +27,7 @@ export function MapView({ onReady }: MapViewProps) {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const styleUrl = import.meta.env.VITE_MAP_STYLE_URL ?? FALLBACK_STYLE_URL;
+    const styleUrl = import.meta.env.VITE_MAP_STYLE_URL ?? DEFAULT_STYLE_URL;
     const supportedBbox = getSupportedBbox();
 
     const map = new maplibregl.Map({
@@ -41,6 +41,7 @@ export function MapView({ onReady }: MapViewProps) {
       attributionControl: { compact: true },
     });
 
+    let cancelled = false;
     map.on('load', () => {
       map.fitBounds(
         [
@@ -50,14 +51,18 @@ export function MapView({ onReady }: MapViewProps) {
         { padding: 40, duration: 0 },
       );
 
-      registerVesselIcon(map);
       addCoverageOutline(map, supportedBbox);
-      addVesselsLayer(map);
-
-      onReadyRef.current(map);
+      // Icon must be registered before the symbol layer references it,
+      // otherwise MapLibre logs "Image not found" on first paint.
+      void registerVesselIcon(map).then(() => {
+        if (cancelled) return;
+        addVesselsLayer(map);
+        onReadyRef.current(map);
+      });
     });
 
     return () => {
+      cancelled = true;
       map.remove();
     };
   }, []);
@@ -65,18 +70,30 @@ export function MapView({ onReady }: MapViewProps) {
   return <div ref={containerRef} className="absolute inset-0" />;
 }
 
-function registerVesselIcon(map: MlMap): void {
-  if (map.hasImage(VESSEL_ICON_ID)) return;
-  const img = new Image(24, 24);
+function registerVesselIcon(map: MlMap): Promise<void> {
+  if (map.hasImage(VESSEL_ICON_ID)) return Promise.resolve();
   const blob = new Blob([VESSEL_SVG], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
-  img.onload = () => {
-    if (!map.hasImage(VESSEL_ICON_ID)) {
-      map.addImage(VESSEL_ICON_ID, img, { pixelRatio: 1 });
-    }
-    URL.revokeObjectURL(url);
-  };
-  img.src = url;
+  return new Promise<void>((resolve, reject) => {
+    const img = new Image(24, 24);
+    img.onload = () => {
+      try {
+        if (!map.hasImage(VESSEL_ICON_ID)) {
+          map.addImage(VESSEL_ICON_ID, img, { pixelRatio: 1 });
+        }
+        resolve();
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('failed to rasterize vessel icon'));
+    };
+    img.src = url;
+  });
 }
 
 function addVesselsLayer(map: MlMap): void {
