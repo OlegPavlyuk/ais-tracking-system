@@ -353,6 +353,7 @@ Grafana dashboard JSON loaded automatically by the Grafana container.
 ## #13 — Frontend — map + REST snapshot + WS updates
 
 **Type:** HITL (UX choices benefit from review).
+**Status:** Planned — design locked. See [`frontend-slice-13-plan.md`](./frontend-slice-13-plan.md) for decisions and execution plan.
 
 ### What to build
 
