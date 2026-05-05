@@ -4,6 +4,7 @@ import WebSocket from 'ws';
 import { ConfigService } from '../../shared/config/config.service';
 import { AisStreamAdapter } from './aisstream.adapter';
 import { AisStreamRawFilter } from './aisstream.raw-filter';
+import { BLACK_SEA_BBOX } from '../../shared/config/constants';
 
 class FakeSocket extends EventEmitter {
   send = jest.fn();
@@ -163,6 +164,40 @@ describe('AisStreamAdapter', () => {
     await adapter.stop();
     jest.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
+  });
+
+  it('subscribes with [latitude, longitude] corners (regression: AISStream uses lat/lon, not lon/lat)', () => {
+    const sockets: FakeSocket[] = [];
+    const factory = (_url: string) => {
+      const s = new FakeSocket();
+      sockets.push(s);
+      return s as unknown as WebSocket;
+    };
+    const adapter = new AisStreamAdapter(makeConfig(), new AisStreamRawFilter(), makeCounter(), {
+      webSocketFactory: factory,
+    });
+    adapter.start();
+    sockets[0]!.open();
+
+    expect(sockets[0]!.send).toHaveBeenCalledTimes(1);
+    const sub = JSON.parse(sockets[0]!.send.mock.calls[0][0] as string);
+    expect(sub.APIKey).toBe('test-key');
+    expect(sub.BoundingBoxes).toEqual([
+      [
+        [BLACK_SEA_BBOX.minLat, BLACK_SEA_BBOX.minLon],
+        [BLACK_SEA_BBOX.maxLat, BLACK_SEA_BBOX.maxLon],
+      ],
+    ]);
+    // Sanity: each corner's first element is a latitude (|lat| <= 90) and second
+    // is a longitude (|lon| <= 180) — but for the Black Sea, |lat| < |lon| is
+    // impossible since both are in (27, 47), so we rely on the explicit equality
+    // above and on the constant being well-formed.
+    for (const corner of sub.BoundingBoxes[0]) {
+      expect(corner[0]).toBeGreaterThanOrEqual(-90);
+      expect(corner[0]).toBeLessThanOrEqual(90);
+      expect(corner[1]).toBeGreaterThanOrEqual(-180);
+      expect(corner[1]).toBeLessThanOrEqual(180);
+    }
   });
 
   it('reports connected from socket.readyState', () => {

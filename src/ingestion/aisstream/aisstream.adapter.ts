@@ -101,8 +101,8 @@ export class AisStreamAdapter implements AisProviderAdapter {
         APIKey: this.apiKey,
         BoundingBoxes: [
           [
-            [BLACK_SEA_BBOX.minLon, BLACK_SEA_BBOX.minLat],
-            [BLACK_SEA_BBOX.maxLon, BLACK_SEA_BBOX.maxLat],
+            [BLACK_SEA_BBOX.minLat, BLACK_SEA_BBOX.minLon],
+            [BLACK_SEA_BBOX.maxLat, BLACK_SEA_BBOX.maxLon],
           ],
         ],
       };
