@@ -90,16 +90,16 @@ proxy to the existing Docker backend on `:3000` (no backend CORS work).
 
 ### Phase 4 — Tests
 
-- [ ] 4.1 `mergeReducer.spec.ts`: snapshot-with-newer-WS-position; static-stub-insert; snapshot drops out-of-result; profile non-null merge.
-- [ ] 4.2 `useDebouncedBbox.spec.ts`: fake timers, trailing semantics.
-- [ ] 4.3 `backoff.spec.ts`: series + jitter bounds + cap.
+- [x] 4.1 `mergeReducer.spec.ts`: snapshot-with-newer-WS-position; static-stub-insert; snapshot drops out-of-result; profile non-null merge.
+- [x] 4.2 `useDebouncedBbox.spec.ts`: fake timers, trailing semantics.
+- [x] 4.3 `backoff.spec.ts`: series + jitter bounds + cap.
 
 ### Phase 5 — Wrap-up
 
-- [ ] 5.1 Manual acceptance check against `docs/issues.md` slice #13 criteria.
-- [ ] 5.2 `pnpm lint`, `pnpm typecheck`, `pnpm test` green in `web/`.
-- [ ] 5.3 Smoke test against running Docker backend.
-- [ ] 5.4 Commit: `feat: frontend map + REST snapshot + WS updates (slice #13)`.
+- [x] 5.1 Manual acceptance check against `docs/issues.md` slice #13 criteria.
+- [x] 5.2 `pnpm lint`, `pnpm typecheck`, `pnpm test` green in `web/`.
+- [x] 5.3 Smoke test against running Docker backend.
+- [x] 5.4 Commit: `feat: frontend map + REST snapshot + WS updates (slice #13)`.
 
 ### Out of scope (held the line)
 
@@ -108,57 +108,3 @@ proxy to the existing Docker backend on `:3000` (no backend CORS work).
 - Sanctions color coding / badges -> #14
 - Vessel count, last-viewed persistence, recenter button, e2e tests, backend CORS, workspace refactor, client-side staleness prune
 
-## Starter Prompt — Slice #13 Implementation
-
-Use this verbatim to bootstrap a fresh session.
-
----
-
-You are picking up Slice #13 of the AIS Tracking System: a MapLibre + React
-frontend that renders live vessel positions for the current viewport. Backend
-slices #1-#12 are complete and verified live.
-
-Repo: `/Users/olegpavlyuk/programming/ais-tracking-system`. Backend is NestJS
-+ Postgres+PostGIS + Redis Streams + BullMQ, dockerized, listening on
-`:3000`. There is no existing `web/` directory yet.
-
-ALL design decisions for this slice are already locked. Read
-`docs/frontend-slice-13-plan.md` first and treat it as the single source of
-truth. Do not re-litigate any decision listed there without explicit user
-approval. Follow Phases 1-5 sequentially and tick the checkboxes as you go
-(in your own task tracker; do not edit the doc unless asked).
-
-Before any other work:
-
-1. Verify `src/contracts/index.ts`, `src/realtime/protocol.ts`, and
-   `src/shared/config/constants.ts` still contain only frontend-safe imports
-   (Zod + pure TS). If a backend-only import has appeared, STOP and report.
-2. Confirm backend port is still `:3000` (`grep PORT src/main.ts
-   docker-compose.yml`).
-
-Style rules:
-
-- Slice commit message: `feat: frontend map + REST snapshot + WS updates (slice #13)`.
-- Tests live next to source as `*.spec.ts` / `*.spec.tsx`.
-- No emojis in code or commits.
-- Comments explain WHY only when non-obvious; never WHAT.
-- Do not create new docs / READMEs unless explicitly requested.
-- Work from the plan doc and conversation; do not write intermediate planning files.
-
-Acceptance criteria are in `docs/issues.md` under slice #13. The plan
-document maps every decision back to those criteria; if you find a gap,
-flag it before coding.
-
-Phases 1, 2, and 3 are already committed:
-- Phase 1: scaffold, deps, aliases, Tailwind, proxy, root scripts.
-- Phase 2: protocol Zod schema, coverage bbox helpers, merge reducer,
-  Zustand store, REST client, backoff, debounced-bbox hook, WS client.
-- Phase 3: MapView (MapLibre init, fitBounds, vessel-default icon,
-  vessels source+symbol layer, coverage outline), useVesselsLayer
-  (rAF/100ms-batched setData), useViewportSync (moveend/zoomend ->
-  store bbox), App orchestration (bootstrap WS + REST snapshot in
-  parallel; debounced bbox -> WS update + significance-gated REST
-  refetch with tolerance-based zoom check and area-ratio guard),
-  StatusPill, CoverageBanner.
-
-Start with Phase 4 (tests).

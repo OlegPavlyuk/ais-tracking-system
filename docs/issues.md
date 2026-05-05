@@ -350,10 +350,10 @@ Grafana dashboard JSON loaded automatically by the Grafana container.
 
 ---
 
-## #13 — Frontend — map + REST snapshot + WS updates
+## #13 — Frontend — map + REST snapshot + WS updates ✅
 
 **Type:** HITL (UX choices benefit from review).
-**Status:** Planned — design locked. See [`frontend-slice-13-plan.md`](./frontend-slice-13-plan.md) for decisions and execution plan.
+**Status:** Complete. See [`frontend-slice-13-plan.md`](./frontend-slice-13-plan.md) for decisions and execution plan.
 
 ### What to build
 
@@ -364,13 +364,13 @@ on debounced `moveend`/`zoomend`.
 
 ### Acceptance criteria
 
-- [ ] Map mounts and loads snapshot from `GET /api/vessels?bbox=`.
-- [ ] WS connection opens to `/ws/positions`, sends `subscribe` with current bbox.
-- [ ] `moveend`/`zoomend` triggers debounced `update_subscription` plus a fresh REST snapshot.
-- [ ] Live `position` events update vessel markers in place; `static` events update vessel meta.
-- [ ] Reconnect handled cleanly when WS drops.
-- [ ] Out-of-Black-Sea bbox handled by error envelope display.
-- [ ] Lightweight component tests for the bbox-debounce hook.
+- [x] Map mounts and loads snapshot from `GET /api/vessels?bbox=`.
+- [x] WS connection opens to `/ws/positions`, sends `subscribe` with current bbox.
+- [x] `moveend`/`zoomend` triggers debounced `update_subscription` plus a fresh REST snapshot.
+- [x] Live `position` events update vessel markers in place; `static` events update vessel meta.
+- [x] Reconnect handled cleanly when WS drops.
+- [x] Out-of-Black-Sea bbox handled by error envelope display.
+- [x] Lightweight component tests for the bbox-debounce hook.
 
 ### Blocked by
 
