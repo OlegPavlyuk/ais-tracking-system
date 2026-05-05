@@ -1,4 +1,11 @@
-import type { PositionEvent, SnapshotRow, StaticEvent, Vessel, VesselEnrichedEvent } from './types';
+import type {
+  PositionEvent,
+  SnapshotRow,
+  StaticEvent,
+  Vessel,
+  VesselEnrichedEvent,
+  VesselSanctionMatch,
+} from './types';
 
 export function emptyVessel(mmsi: string): Vessel {
   return {
@@ -19,6 +26,7 @@ export function emptyVessel(mmsi: string): Vessel {
     staticOccurredAt: null,
     sanctionsStatus: null,
     sanctionsCheckedAt: null,
+    sanctionsMatches: null,
   };
 }
 
@@ -121,12 +129,23 @@ export function applyEnriched(
   if (base.sanctionsCheckedAt && Date.parse(ev.checkedAt) < Date.parse(base.sanctionsCheckedAt)) {
     return prev as Map<string, Vessel>;
   }
+  const matches: VesselSanctionMatch[] = ev.matches
+    .filter((m) => m.source === 'ofac' || m.source === 'opensanctions')
+    .map((m) => ({
+      id: m.entityId,
+      source: m.source as 'ofac' | 'opensanctions',
+      entityName: m.name,
+      matchMethod: m.matchMethod,
+      score: null,
+    }));
+
   const next = new Map(prev);
   next.set(ev.mmsi, {
     ...base,
     vesselId: ev.vesselId,
     sanctionsStatus: ev.status,
     sanctionsCheckedAt: ev.checkedAt,
+    sanctionsMatches: matches,
   });
   return next;
 }

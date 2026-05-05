@@ -145,12 +145,12 @@ No e2e. No MapLibre mocking.
 
 | Phase | Status |
 |-------|--------|
-| 1 — Dependencies + API layer | not started |
-| 2 — Map click hook | not started |
-| 3 — Detail panel component | not started |
-| 4 — App wiring | not started |
-| 5 — Tests | not started |
-| 6 — Wrap-up | not started |
+| 1 — Dependencies + API layer | complete |
+| 2 — Map click hook | complete |
+| 3 — Detail panel component | complete |
+| 4 — App wiring | complete |
+| 5 — Tests | complete |
+| 6 — Wrap-up | complete |
 
 ---
 

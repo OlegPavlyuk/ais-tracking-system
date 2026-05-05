@@ -378,7 +378,7 @@ on debounced `moveend`/`zoomend`.
 
 ---
 
-## #14 — Frontend — vessel detail panel + sanctions badge
+## #14 — Frontend — vessel detail panel + sanctions badge ✓ COMPLETE
 
 **Type:** HITL
 

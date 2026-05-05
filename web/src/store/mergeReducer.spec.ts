@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyEnriched,
   applyPosition,
   applySnapshotRows,
   applyStatic,
   emptyVessel,
 } from './mergeReducer';
-import type { PositionEvent, SnapshotRow, StaticEvent, Vessel } from './types';
+import type { PositionEvent, SnapshotRow, StaticEvent, Vessel, VesselEnrichedEvent } from './types';
 
 const MMSI_A = '111111111';
 const MMSI_B = '222222222';
@@ -242,5 +243,85 @@ describe('applySnapshotRows', () => {
   it('always sets vesselId from the snapshot row', () => {
     const next = applySnapshotRows(new Map(), [snapshotRow({ id: 'v-42' })]);
     expect((next.get(MMSI_A) as Vessel).vesselId).toBe('v-42');
+  });
+});
+
+function enrichedEvent(overrides: Partial<VesselEnrichedEvent> = {}): VesselEnrichedEvent {
+  return {
+    schemaVersion: 1,
+    vesselId: '00000000-0000-0000-0000-000000000001',
+    mmsi: MMSI_A,
+    status: 'clear',
+    matches: [],
+    checkedAt: '2024-01-01T00:00:00.000Z',
+    ...overrides,
+  } as VesselEnrichedEvent;
+}
+
+describe('applyEnriched', () => {
+  it('stores mapped sanctionsMatches from the event', () => {
+    const next = applyEnriched(
+      new Map(),
+      enrichedEvent({
+        status: 'sanctioned',
+        matches: [
+          {
+            entityId: 'e-1',
+            source: 'ofac',
+            sourceEntityId: 'src-1',
+            name: 'DANGER CORP',
+            matchMethod: 'imo',
+            aliases: [],
+            flag: null,
+            listingDate: null,
+          },
+        ],
+      }),
+    );
+    const v = next.get(MMSI_A) as Vessel;
+    expect(v.sanctionsStatus).toBe('sanctioned');
+    expect(v.sanctionsMatches).toEqual([
+      { id: 'e-1', source: 'ofac', entityName: 'DANGER CORP', matchMethod: 'imo', score: null },
+    ]);
+  });
+
+  it('stores an empty array (not null) when event has no matches', () => {
+    const next = applyEnriched(new Map(), enrichedEvent({ status: 'clear', matches: [] }));
+    const v = next.get(MMSI_A) as Vessel;
+    expect(v.sanctionsMatches).toEqual([]);
+  });
+
+  it('filters out matches with unsupported source values', () => {
+    const next = applyEnriched(
+      new Map(),
+      enrichedEvent({
+        matches: [
+          {
+            entityId: 'e-good',
+            source: 'opensanctions',
+            sourceEntityId: 'src-good',
+            name: 'GOOD ENTITY',
+            matchMethod: 'mmsi',
+            aliases: [],
+            flag: null,
+            listingDate: null,
+          },
+          {
+            entityId: 'e-bad',
+            source: 'unknown_source',
+            sourceEntityId: 'src-bad',
+            name: 'BAD ENTITY',
+            matchMethod: 'name_candidate',
+            aliases: [],
+            flag: null,
+            listingDate: null,
+          },
+        ],
+      }),
+    );
+    const v = next.get(MMSI_A) as Vessel;
+    const matches = v.sanctionsMatches ?? [];
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.id).toBe('e-good');
   });
 });

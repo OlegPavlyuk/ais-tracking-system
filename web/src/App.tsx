@@ -3,8 +3,10 @@ import type { Map as MlMap } from 'maplibre-gl';
 import { MapView } from './map/MapView';
 import { useVesselsLayer } from './map/useVesselsLayer';
 import { useViewportSync } from './map/useViewportSync';
+import { useVesselClick } from './map/useVesselClick';
 import { StatusPill } from './components/StatusPill';
 import { CoverageBanner } from './components/CoverageBanner';
+import { VesselDetailPanel } from './components/VesselDetailPanel';
 import { useVesselsStore } from './store/vessels';
 import { useDebouncedBbox } from './hooks/useDebouncedBbox';
 import { ApiError, fetchSnapshot } from './api/client';
@@ -19,6 +21,7 @@ const ZOOM_SIGNIFICANCE_THRESHOLD = 0.25;
 
 export function App() {
   const [map, setMap] = useState<MlMap | null>(null);
+  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const wsRef = useRef<WsClient | null>(null);
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -31,6 +34,7 @@ export function App() {
 
   useVesselsLayer(map);
   useViewportSync(map);
+  useVesselClick(map, setSelectedMmsi);
 
   const runFetch = useCallback((bbox: Bbox, zoom: number | null) => {
     // Clamp to supported coverage area. fitBounds() padding plus aspect-ratio
@@ -167,6 +171,9 @@ export function App() {
       <MapView onReady={setMap} />
       <StatusPill />
       <CoverageBanner />
+      {selectedMmsi && (
+        <VesselDetailPanel mmsi={selectedMmsi} onClose={() => setSelectedMmsi(null)} />
+      )}
     </div>
   );
 }
