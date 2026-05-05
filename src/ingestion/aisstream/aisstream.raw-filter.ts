@@ -1,24 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { DropReason } from '../../shared/metrics/drop-reasons';
-
-// ExtendedClassBPositionReport (Type 19) is observed in fixtures but intentionally
-// deferred: it is a hybrid (position + Name/ShipType/Dimension) and not yet
-// declared in docs/architecture-decisions.md. Decide its mapping before adding.
-export const VESSEL_MESSAGE_TYPES = new Set<string>([
-  'PositionReport',
-  'StandardClassBPositionReport',
-  'StaticDataReport',
-  'ShipStaticData',
-]);
+import {
+  AisStreamAcceptedMessageType,
+  isAisStreamAcceptedMessageType,
+} from './aisstream.message-types';
+import { AisStreamEnvelope, AisStreamUnknownMessage } from './aisstream.raw-types';
 
 export type RawFilterResult =
   | { accepted: true }
   | { accepted: false; reason: Extract<DropReason, 'non_vessel_mmsi' | 'invalid'> };
-
-interface AisStreamLike {
-  MessageType?: string;
-  MetaData?: { MMSI?: number | string };
-}
 
 /**
  * Drops AISStream messages that are not vessel-originated or whose MMSI is not a
@@ -28,13 +18,31 @@ interface AisStreamLike {
 @Injectable()
 export class AisStreamRawFilter {
   accept(raw: unknown): RawFilterResult {
-    if (!raw || typeof raw !== 'object') return { accepted: false, reason: 'invalid' };
-    const msg = raw as AisStreamLike;
-    if (!msg.MessageType || !VESSEL_MESSAGE_TYPES.has(msg.MessageType)) {
+    if (!isRecord(raw)) return { accepted: false, reason: 'invalid' };
+    const msg = raw as AisStreamUnknownMessage;
+    if (typeof msg.MessageType !== 'string') {
+      return { accepted: false, reason: 'invalid' };
+    }
+    if (!isAisStreamAcceptedMessageType(msg.MessageType)) {
       return { accepted: false, reason: 'non_vessel_mmsi' };
+    }
+    if (!isAcceptedEnvelope(msg, msg.MessageType)) {
+      return { accepted: false, reason: 'invalid' };
     }
     const mmsi = String(msg.MetaData?.MMSI ?? '');
     if (!/^\d{9}$/.test(mmsi)) return { accepted: false, reason: 'non_vessel_mmsi' };
     return { accepted: true };
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isAcceptedEnvelope(
+  msg: AisStreamUnknownMessage,
+  messageType: AisStreamAcceptedMessageType,
+): msg is AisStreamEnvelope<AisStreamAcceptedMessageType, unknown> {
+  if (!isRecord(msg.Message)) return false;
+  return isRecord(msg.Message[messageType]);
 }

@@ -87,6 +87,51 @@ describe('AisStreamNormalizer', () => {
     expect(event.shipName).toBe('MEDEA');
   });
 
+  it('normalizes an ExtendedClassBPositionReport into a canonical position event', () => {
+    const raw = {
+      MessageType: 'ExtendedClassBPositionReport',
+      Message: {
+        ExtendedClassBPositionReport: {
+          Cog: 218.5,
+          Latitude: 51.709939999999996,
+          Longitude: -2.5090500000000002,
+          Name: 'CYANNE-99%   ',
+          Sog: 0,
+          TrueHeading: 456,
+          UserID: 235066428,
+          Valid: true,
+        },
+      },
+      MetaData: {
+        MMSI: 235066428,
+        ShipName: '',
+        time_utc: '2026-04-30 06:32:41.383471694 +0000 UTC',
+      },
+    };
+
+    const event = normalizer.normalize(
+      { provider: 'aisstream', receivedAt: fixedNow.toISOString(), payload: raw },
+      fixedNow,
+    );
+
+    expect(event).not.toBeNull();
+    expect(PositionEventSchema.safeParse(event).success).toBe(true);
+    expect(event).toMatchObject({
+      kind: 'position',
+      mmsi: '235066428',
+      lat: 51.709939999999996,
+      lon: -2.5090500000000002,
+      sog: 0,
+      cog: 218.5,
+      trueHeading: 456,
+      navStatus: null,
+      rateOfTurn: null,
+      shipName: 'CYANNE-99%',
+      provider: 'aisstream',
+    });
+    expect(event!.occurredAt).toBe('2026-04-30T06:32:41.383Z');
+  });
+
   it('normalizes StaticDataReport with only Part A (Name) populated', () => {
     const raw = {
       MessageType: 'StaticDataReport',
@@ -335,10 +380,10 @@ describe('AisStreamNormalizer', () => {
     expect((event as { imo: string | null }).imo).toBeNull();
   });
 
-  it('returns null for unsupported message types (e.g. ExtendedClassBPositionReport)', () => {
+  it('returns null for unsupported message types (type 27 remains unsupported)', () => {
     const raw = {
-      MessageType: 'ExtendedClassBPositionReport',
-      Message: { ExtendedClassBPositionReport: { UserID: 257786070, Valid: true } },
+      MessageType: 'LongRangeAisBroadcastMessage',
+      Message: { LongRangeAisBroadcastMessage: { UserID: 257786070, Valid: true } },
       MetaData: { MMSI: 257786070, time_utc: '2026-04-30 06:32:17.022814111 +0000 UTC' },
     };
     expect(

@@ -8,61 +8,21 @@ import {
   StaticEvent,
 } from '../../contracts';
 import { ProviderNormalizer } from '../provider';
-
-interface AisStreamPositionReport {
-  Cog?: number;
-  Latitude?: number;
-  Longitude?: number;
-  NavigationalStatus?: number;
-  RateOfTurn?: number;
-  Sog?: number;
-  TrueHeading?: number;
-  UserID?: number;
-  Valid?: boolean;
-}
-
-interface AisStreamDimension {
-  A?: number;
-  B?: number;
-  C?: number;
-  D?: number;
-}
-
-interface AisStreamStaticDataReport {
-  ReportA?: { Name?: string; Valid?: boolean };
-  ReportB?: {
-    CallSign?: string;
-    Dimension?: AisStreamDimension;
-    ShipType?: number;
-    Valid?: boolean;
-  };
-  UserID?: number;
-  Valid?: boolean;
-}
-
-interface AisStreamShipStaticData {
-  CallSign?: string;
-  Destination?: string;
-  Dimension?: AisStreamDimension;
-  ImoNumber?: number;
-  Name?: string;
-  Type?: number;
-  UserID?: number;
-  Valid?: boolean;
-}
-
-interface AisStreamMessage {
-  MessageType?: string;
-  Message?: Record<string, unknown>;
-  MetaData?: {
-    MMSI?: number | string;
-    ShipName?: string;
-    time_utc?: string;
-  };
-}
-
-const POSITION_TYPES = new Set(['PositionReport', 'StandardClassBPositionReport']);
-const STATIC_TYPES = new Set(['StaticDataReport', 'ShipStaticData']);
+import {
+  AisStreamDimension,
+  AisStreamExtendedClassBPositionReportMessage,
+  AisStreamExtendedClassBPositionReportPayload,
+  AisStreamMetaData,
+  AisStreamPositionPayload,
+  AisStreamPositionReportMessage,
+  AisStreamPositionReportPayload,
+  AisStreamShipStaticDataMessage,
+  AisStreamShipStaticDataPayload,
+  AisStreamStandardClassBPositionReportMessage,
+  AisStreamStaticDataReportMessage,
+  AisStreamStaticDataReportPayload,
+  AisStreamUnknownMessage,
+} from './aisstream.raw-types';
 
 /** Parse `2026-04-28 04:52:17.518241663 +0000 UTC` → ISO string. */
 function parseAisStreamTimestamp(s: string | undefined): string | null {
@@ -101,44 +61,94 @@ function dimensionsOrNull(d: AisStreamDimension | undefined): {
   return { bow: a, stern: b, port: c, starboard: dd };
 }
 
+function hasNavigationFields(
+  report: AisStreamPositionPayload,
+): report is AisStreamPositionReportPayload {
+  return 'NavigationalStatus' in report || 'RateOfTurn' in report;
+}
+
+function hasEmbeddedShipName(
+  report: AisStreamPositionPayload,
+): report is AisStreamExtendedClassBPositionReportPayload {
+  return 'Name' in report;
+}
+
 @Injectable()
 export class AisStreamNormalizer implements ProviderNormalizer {
   private readonly logger = new Logger(AisStreamNormalizer.name);
   readonly provider = 'aisstream';
 
   normalize(raw: RawProviderMessage<unknown>, now: Date = new Date()): CanonicalEvent | null {
-    const msg = raw.payload as AisStreamMessage;
-    const type = msg.MessageType;
-    if (!type) return null;
-    if (POSITION_TYPES.has(type)) return this.normalizePosition(raw, msg, type, now);
-    if (STATIC_TYPES.has(type)) return this.normalizeStatic(raw, msg, type, now);
-    return null;
+    const msg = raw.payload as AisStreamUnknownMessage;
+
+    switch (msg.MessageType) {
+      case 'PositionReport':
+        return this.normalizePosition(
+          raw,
+          (msg as AisStreamPositionReportMessage).Message?.PositionReport,
+          msg.MetaData,
+          now,
+        );
+      case 'StandardClassBPositionReport':
+        return this.normalizePosition(
+          raw,
+          (msg as AisStreamStandardClassBPositionReportMessage).Message
+            ?.StandardClassBPositionReport,
+          msg.MetaData,
+          now,
+        );
+      case 'ExtendedClassBPositionReport':
+        return this.normalizePosition(
+          raw,
+          (msg as AisStreamExtendedClassBPositionReportMessage).Message
+            ?.ExtendedClassBPositionReport,
+          msg.MetaData,
+          now,
+        );
+      case 'StaticDataReport':
+        return this.normalizeStaticDataReport(
+          raw,
+          (msg as AisStreamStaticDataReportMessage).Message?.StaticDataReport,
+          msg.MetaData,
+          now,
+        );
+      case 'ShipStaticData':
+        return this.normalizeShipStaticData(
+          raw,
+          (msg as AisStreamShipStaticDataMessage).Message?.ShipStaticData,
+          msg.MetaData,
+          now,
+        );
+      default:
+        return null;
+    }
   }
 
   private normalizePosition(
     raw: RawProviderMessage<unknown>,
-    msg: AisStreamMessage,
-    type: string,
+    report: AisStreamPositionPayload | undefined,
+    meta: AisStreamMetaData | undefined,
     now: Date,
   ): PositionEvent | null {
-    const report = msg.Message?.[type] as AisStreamPositionReport | undefined;
     if (!report) return null;
     if (report.Valid === false) return null;
 
-    const occurredAt = parseAisStreamTimestamp(msg.MetaData?.time_utc) ?? raw.receivedAt;
-    const shipName = cleanString(msg.MetaData?.ShipName, 255);
+    const occurredAt = parseAisStreamTimestamp(meta?.time_utc) ?? raw.receivedAt;
+    const shipName =
+      cleanString(meta?.ShipName, 255) ??
+      (hasEmbeddedShipName(report) ? cleanString(report.Name, 255) : null);
 
     const candidate: Partial<PositionEvent> = {
       schemaVersion: SCHEMA_VERSION,
       kind: 'position',
-      mmsi: String(msg.MetaData?.MMSI ?? report.UserID ?? ''),
+      mmsi: String(meta?.MMSI ?? report.UserID ?? ''),
       lat: report.Latitude as number,
       lon: report.Longitude as number,
       sog: report.Sog ?? null,
       cog: report.Cog ?? null,
       trueHeading: report.TrueHeading ?? null,
-      navStatus: report.NavigationalStatus ?? null,
-      rateOfTurn: report.RateOfTurn ?? null,
+      navStatus: hasNavigationFields(report) ? report.NavigationalStatus ?? null : null,
+      rateOfTurn: hasNavigationFields(report) ? report.RateOfTurn ?? null : null,
       shipName,
       occurredAt,
       provider: raw.provider,
@@ -153,32 +163,20 @@ export class AisStreamNormalizer implements ProviderNormalizer {
     return parsed.data as PositionEvent;
   }
 
-  private normalizeStatic(
+  private normalizeStaticDataReport(
     raw: RawProviderMessage<unknown>,
-    msg: AisStreamMessage,
-    type: string,
+    report: AisStreamStaticDataReportPayload | undefined,
+    meta: AisStreamMetaData | undefined,
     now: Date,
   ): StaticEvent | null {
-    const occurredAt = parseAisStreamTimestamp(msg.MetaData?.time_utc) ?? raw.receivedAt;
-    const report =
-      type === 'StaticDataReport'
-        ? (msg.Message?.[type] as AisStreamStaticDataReport | undefined)
-        : (msg.Message?.[type] as AisStreamShipStaticData | undefined);
-    const baseFields = {
-      schemaVersion: SCHEMA_VERSION,
-      kind: 'static' as const,
-      mmsi: String(msg.MetaData?.MMSI ?? report?.UserID ?? ''),
-      occurredAt,
-      provider: raw.provider,
-      ingestedAt: now.toISOString(),
-    };
-
-    let candidate: Partial<StaticEvent> | null = null;
-    if (type === 'StaticDataReport') {
-      candidate = this.fromStaticDataReport(report as AisStreamStaticDataReport | undefined, baseFields);
-    } else if (type === 'ShipStaticData') {
-      candidate = this.fromShipStaticData(report as AisStreamShipStaticData | undefined, baseFields);
-    }
+    const baseFields = this.buildStaticBaseFields(
+      raw,
+      meta,
+      report?.UserID,
+      parseAisStreamTimestamp(meta?.time_utc) ?? raw.receivedAt,
+      now,
+    );
+    const candidate = this.fromStaticDataReport(report, baseFields);
     if (!candidate) return null;
 
     const parsed = CanonicalEventSchema.safeParse(candidate);
@@ -189,8 +187,49 @@ export class AisStreamNormalizer implements ProviderNormalizer {
     return parsed.data as StaticEvent;
   }
 
+  private normalizeShipStaticData(
+    raw: RawProviderMessage<unknown>,
+    report: AisStreamShipStaticDataPayload | undefined,
+    meta: AisStreamMetaData | undefined,
+    now: Date,
+  ): StaticEvent | null {
+    const baseFields = this.buildStaticBaseFields(
+      raw,
+      meta,
+      report?.UserID,
+      parseAisStreamTimestamp(meta?.time_utc) ?? raw.receivedAt,
+      now,
+    );
+    const candidate = this.fromShipStaticData(report, baseFields);
+    if (!candidate) return null;
+
+    const parsed = CanonicalEventSchema.safeParse(candidate);
+    if (!parsed.success) {
+      this.logger.debug(`drop invalid static event: ${parsed.error.issues[0]?.message}`);
+      return null;
+    }
+    return parsed.data as StaticEvent;
+  }
+
+  private buildStaticBaseFields(
+    raw: RawProviderMessage<unknown>,
+    meta: AisStreamMetaData | undefined,
+    userId: number | undefined,
+    occurredAt: string,
+    now: Date,
+  ): Pick<StaticEvent, 'schemaVersion' | 'kind' | 'mmsi' | 'occurredAt' | 'provider' | 'ingestedAt'> {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      kind: 'static' as const,
+      mmsi: String(meta?.MMSI ?? userId ?? ''),
+      occurredAt,
+      provider: raw.provider,
+      ingestedAt: now.toISOString(),
+    };
+  }
+
   private fromStaticDataReport(
-    report: AisStreamStaticDataReport | undefined,
+    report: AisStreamStaticDataReportPayload | undefined,
     base: Pick<StaticEvent, 'schemaVersion' | 'kind' | 'mmsi' | 'occurredAt' | 'provider' | 'ingestedAt'>,
   ): Partial<StaticEvent> | null {
     if (!report) return null;
@@ -221,7 +260,7 @@ export class AisStreamNormalizer implements ProviderNormalizer {
   }
 
   private fromShipStaticData(
-    report: AisStreamShipStaticData | undefined,
+    report: AisStreamShipStaticDataPayload | undefined,
     base: Pick<StaticEvent, 'schemaVersion' | 'kind' | 'mmsi' | 'occurredAt' | 'provider' | 'ingestedAt'>,
   ): Partial<StaticEvent> | null {
     if (!report) return null;

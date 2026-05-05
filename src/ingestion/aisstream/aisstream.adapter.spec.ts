@@ -3,6 +3,7 @@ import { Counter, Registry } from 'prom-client';
 import WebSocket from 'ws';
 import { ConfigService } from '../../shared/config/config.service';
 import { AisStreamAdapter } from './aisstream.adapter';
+import { AISSTREAM_ACCEPTED_MESSAGE_TYPES } from './aisstream.message-types';
 import { AisStreamRawFilter } from './aisstream.raw-filter';
 import { BLACK_SEA_BBOX } from '../../shared/config/constants';
 
@@ -188,6 +189,7 @@ describe('AisStreamAdapter', () => {
         [BLACK_SEA_BBOX.maxLat, BLACK_SEA_BBOX.maxLon],
       ],
     ]);
+    expect(sub.FilterMessageTypes).toEqual(AISSTREAM_ACCEPTED_MESSAGE_TYPES);
     // Sanity: each corner's first element is a latitude (|lat| <= 90) and second
     // is a longitude (|lon| <= 180) — but for the Black Sea, |lat| < |lon| is
     // impossible since both are in (27, 47), so we rely on the explicit equality

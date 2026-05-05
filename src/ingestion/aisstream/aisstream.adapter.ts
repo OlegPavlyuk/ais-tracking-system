@@ -13,6 +13,7 @@ import {
 import { ProviderHealth } from '../../shared/health/provider-health';
 import { AisProviderAdapter, RawMessageHandler } from '../provider';
 import { nextBackoffMs } from '../backoff';
+import { AISSTREAM_ACCEPTED_MESSAGE_TYPES } from './aisstream.message-types';
 import { AisStreamRawFilter } from './aisstream.raw-filter';
 
 const STREAM_URL = 'wss://stream.aisstream.io/v0/stream';
@@ -105,6 +106,7 @@ export class AisStreamAdapter implements AisProviderAdapter {
             [BLACK_SEA_BBOX.maxLat, BLACK_SEA_BBOX.maxLon],
           ],
         ],
+        FilterMessageTypes: AISSTREAM_ACCEPTED_MESSAGE_TYPES,
       };
       socket.send(JSON.stringify(sub));
       this.logger.log('AISStream subscribed to Black Sea bbox');
