@@ -56,14 +56,14 @@ data per the CC-BY-NC 4.0 license requirement.
 
 ### Phase 1 — Dependencies + API layer
 
-- [ ] 1.1 Install `@tanstack/react-query` in `web/`.
-- [ ] 1.2 Add `<QueryClientProvider>` with a configured `QueryClient` (`staleTime: 30_000`, `retry: 1`, `refetchOnWindowFocus: false`) in `web/src/main.tsx`.
-- [ ] 1.3 Add `fetchVesselDetail(vesselId: string, signal: AbortSignal): Promise<VesselDetailRow>` to `web/src/api/client.ts`. Signal is required. Reuse `ApiError`. Mirror `VesselDetailRow` + `VesselSanctionMatch` shapes locally in `web/src/store/types.ts` (backend type is not importable from the frontend safely; replicate the shape).
-- [ ] 1.4 Add `shipTypeLabel(code: number | null): string` to `web/src/lib/shipTypeLabel.ts`. Range lookup: 60–69 → `'Passenger'`, 70–79 → `'Cargo'`, 80–89 → `'Tanker'`, null → `'—'`, else → `` `Type ${code}` ``.
+- [x] 1.1 Install `@tanstack/react-query` in `web/`.
+- [x] 1.2 Add `<QueryClientProvider>` with a configured `QueryClient` (`staleTime: 30_000`, `retry: 1`, `refetchOnWindowFocus: false`) in `web/src/main.tsx`.
+- [x] 1.3 Add `fetchVesselDetail(vesselId: string, signal: AbortSignal): Promise<VesselDetailRow>` to `web/src/api/client.ts`. Signal is required. Reuse `ApiError`. Mirror `VesselDetailRow` + `VesselSanctionMatch` shapes locally in `web/src/store/types.ts` (backend type is not importable from the frontend safely; replicate the shape).
+- [x] 1.4 Add `shipTypeLabel(code: number | null): string` to `web/src/lib/shipTypeLabel.ts`. Range lookup: 60–69 → `'Passenger'`, 70–79 → `'Cargo'`, 80–89 → `'Tanker'`, null → `'—'`, else → `` `Type ${code}` ``.
 
 ### Phase 2 — Map click hook
 
-- [ ] 2.1 Create `web/src/map/useVesselClick.ts`.
+- [x] 2.1 Create `web/src/map/useVesselClick.ts`.
   - `useEffect` depending on `[map, onSelect]`.
   - Register `map.on('click', 'vessels', clickHandler)`.
   - In `clickHandler`: read `mmsi` from `e.features?.[0]?.properties?.mmsi`; type-guard to non-empty string; call `onSelect(mmsi)`.
@@ -73,7 +73,7 @@ data per the CC-BY-NC 4.0 license requirement.
 
 ### Phase 3 — Detail panel component
 
-- [ ] 3.1 Create `web/src/components/VesselDetailPanel.tsx`.
+- [x] 3.1 Create `web/src/components/VesselDetailPanel.tsx`.
   - Props: `mmsi: string`, `onClose: () => void`.
   - Determine state from Zustand + query (three states per decision #7).
   - For sanctions: prefer Zustand `sanctionsStatus` / `sanctionsMatches` over query data.
@@ -84,13 +84,13 @@ data per the CC-BY-NC 4.0 license requirement.
 
 ### Phase 4 — App wiring
 
-- [ ] 4.1 Add `useVesselClick(map, setSelectedMmsi)` in `App.tsx`.
-- [ ] 4.2 Add `selectedMmsi` state + conditional `{selectedMmsi && <VesselDetailPanel mmsi={selectedMmsi} onClose={() => setSelectedMmsi(null)} />}` in `App.tsx` return.
+- [x] 4.1 Add `useVesselClick(map, setSelectedMmsi)` in `App.tsx`.
+- [x] 4.2 Add `selectedMmsi` state + conditional `{selectedMmsi && <VesselDetailPanel mmsi={selectedMmsi} onClose={() => setSelectedMmsi(null)} />}` in `App.tsx` return.
 
 ### Phase 5 — Tests
 
-- [ ] 5.1 `web/src/lib/shipTypeLabel.spec.ts`: cargo (70), tanker (80), passenger (60), unknown (99) → `'Type 99'`, null → `'—'`.
-- [ ] 5.2 `web/src/components/VesselDetailPanel.spec.tsx` (wrap each in `QueryClientProvider` with fresh `QueryClient`):
+- [x] 5.1 `web/src/lib/shipTypeLabel.spec.ts`: cargo (70), tanker (80), passenger (60), unknown (99) → `'Type 99'`, null → `'—'`.
+- [x] 5.2 `web/src/components/VesselDetailPanel.spec.tsx` (wrap each in `QueryClientProvider` with fresh `QueryClient`):
   - renders mmsi-only fallback (state 2) when `vesselId` is null in Zustand
   - renders profile/detail data (state 1) from query response
   - renders correct pill label for each `sanctionsStatus` value (`null`, `'clear'`, `'candidate'`, `'sanctioned'`)
@@ -101,20 +101,20 @@ data per the CC-BY-NC 4.0 license requirement.
 
 ### Phase 6 — Wrap-up
 
-- [ ] 6.1 `pnpm lint && pnpm typecheck && pnpm test` green in `web/`.
-- [ ] 6.2 Manual smoke test: click vessel → panel opens → sanctions badge visible → close → panel gone → click different vessel → switches directly.
-- [ ] 6.3 Commit: `feat: vessel detail panel + sanctions badge (slice #14)`.
-- [ ] 6.4 Mark slice #14 complete in `docs/issues.md` and this file's Progress Tracker.
+- [x] 6.1 `pnpm lint && pnpm typecheck && pnpm test` green in `web/`.
+- [x] 6.2 Manual smoke test: click vessel → panel opens → sanctions badge visible → close → panel gone → click different vessel → switches directly.
+- [x] 6.3 Commit: `feat: vessel detail panel + sanctions badge (slice #14)`.
+- [x] 6.4 Mark slice #14 complete in `docs/issues.md` and this file's Progress Tracker.
 
 ---
 
 ## Acceptance Checklist
 
-- [ ] Click on marker opens detail panel populated from `GET /api/vessels/:id`.
-- [ ] Sanctions status renders as a visible badge with source attribution.
-- [ ] OpenSanctions data shown with CC-BY-NC 4.0 attribution inline per match.
-- [ ] `vessel.enriched` WS messages update the open panel live (via Zustand).
-- [ ] Closing the panel cleans up: query disabled, panel unmounts, selection cleared.
+- [x] Click on marker opens detail panel populated from `GET /api/vessels/:id`.
+- [x] Sanctions status renders as a visible badge with source attribution.
+- [x] OpenSanctions data shown with CC-BY-NC 4.0 attribution inline per match.
+- [x] `vessel.enriched` WS messages update the open panel live (via Zustand).
+- [x] Closing the panel cleans up: query disabled, panel unmounts, selection cleared.
 
 ---
 
@@ -152,51 +152,3 @@ No e2e. No MapLibre mocking.
 | 5 — Tests | complete |
 | 6 — Wrap-up | complete |
 
----
-
-## Next-Session Starting Prompt
-
-Use this verbatim to bootstrap a fresh session for Slice #14.
-
----
-
-You are picking up Slice #14 of the AIS Tracking System: a vessel detail
-panel that opens when the user clicks a vessel marker on the MapLibre map.
-Slices #1–#13 are complete and verified.
-
-Repo: `/Users/olegpavlyuk/programming/ais-tracking-system`.
-Frontend lives in `web/`. Backend is NestJS + Postgres+PostGIS + Redis +
-BullMQ, dockerized on `:3000`.
-
-ALL design decisions for this slice are locked. Read
-`docs/frontend-slice-14-plan.md` first and treat it as the single source of
-truth. Do not re-litigate any decision without explicit user approval.
-Check the Progress Tracker table to find where to resume.
-
-Key facts:
-
-- `web/src/store/vessels.ts` — Zustand store. `Vessel` type in `web/src/store/types.ts`.
-- `web/src/api/client.ts` — existing `fetchSnapshot`; add `fetchVesselDetail` here.
-- `web/src/map/MapView.tsx` — exports `MapViewIds.vesselsLayerId = 'vessels'`.
-- `web/src/App.tsx` — owns `map` state, WS client, bootstrap logic; add `selectedMmsi` state here.
-- Backend `GET /api/vessels/:id` returns `VesselDetailRow`:
-  `{ id, mmsi, imo, name, callSign, shipType, destination, dimensionToBow,
-  dimensionToStern, dimensionToPort, dimensionToStarboard, sanctionsStatus,
-  sanctionsCheckedAt, sanctionsMatches, position }`.
-- `sanctionsMatches[].source` is `'ofac'` or `'opensanctions'`.
-- `vessel.enriched` WS events already flow through Zustand `applyEnriched`.
-- Three panel states (see decision #7): (1) vessel + vesselId known → full panel;
-  (2) vessel present but vesselId null → mmsi-only fallback;
-  (3) vessel absent from Zustand → outside-viewport state.
-- Zustand data takes precedence over query data for sanctions fields.
-- Use object-style TanStack Query: `useQuery({ queryKey, queryFn: ({ signal }) => ..., ... })`.
-- `fetchVesselDetail` must accept and forward `AbortSignal`.
-- Live position fields formatted: SOG → `{n} kn`, COG/heading → `{n}°`, null → `—`.
-- Panel: `fixed right-0 top-0 h-full w-[360px] bg-white shadow-xl z-[200] overflow-y-auto`.
-- Style: Tailwind. No emojis. Comments only for non-obvious WHY.
-- Tests next to source as `*.spec.ts` / `*.spec.tsx`.
-- Commit message: `feat: vessel detail panel + sanctions badge (slice #14)`.
-
-After each phase: run `pnpm lint && pnpm typecheck && pnpm test` in `web/`,
-commit completed work, update the Progress Tracker.
-After all phases: mark slice #14 complete in `docs/issues.md`.

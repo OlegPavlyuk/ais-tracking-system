@@ -390,11 +390,11 @@ Live `vessel.enriched` events update the badge without reload.
 
 ### Acceptance criteria
 
-- [ ] Click on marker opens detail panel populated from `GET /api/vessels/:id`.
-- [ ] Sanctions status renders as a visible badge with source attribution.
-- [ ] OpenSanctions data is shown with required CC-BY-NC 4.0 attribution.
-- [ ] `vessel.enriched` WS messages update the open panel live.
-- [ ] Closing the panel cleans up subscriptions.
+- [x] Click on marker opens detail panel populated from `GET /api/vessels/:id`.
+- [x] Sanctions status renders as a visible badge with source attribution.
+- [x] OpenSanctions data is shown with required CC-BY-NC 4.0 attribution.
+- [x] `vessel.enriched` WS messages update the open panel live.
+- [x] Closing the panel cleans up subscriptions.
 
 ### Blocked by
 
