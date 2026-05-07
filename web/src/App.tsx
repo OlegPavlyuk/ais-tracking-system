@@ -4,6 +4,7 @@ import { MapView } from './map/MapView';
 import { useVesselsLayer } from './map/useVesselsLayer';
 import { useViewportSync } from './map/useViewportSync';
 import { useVesselClick } from './map/useVesselClick';
+import { useVesselHover } from './map/useVesselHover';
 import { StatusPill } from './components/StatusPill';
 import { CoverageBanner } from './components/CoverageBanner';
 import { VesselDetailPanel } from './components/VesselDetailPanel';
@@ -36,6 +37,7 @@ export function App() {
   useVesselsLayer(map);
   useViewportSync(map);
   useVesselClick(map, setSelectedMmsi);
+  useVesselHover(map);
 
   const runFetch = useCallback((bbox: Bbox, zoom: number | null) => {
     // Clamp to supported coverage area. fitBounds() padding plus aspect-ratio

@@ -52,24 +52,46 @@ describe('buildFeatureCollection', () => {
     expect(fc.features[0]!.properties.color).toBe('#95A5A6');
   });
 
-  it('prefers trueHeading over cog for rotation', () => {
+  it('prefers valid COG over trueHeading for rotation', () => {
     const vessels = new Map([
       ['a', makeVessel({ cog: 90, trueHeading: 180 })],
-    ]);
-    const fc = buildFeatureCollection(vessels);
-    expect(fc.features[0]!.properties.rotation).toBe(180);
-  });
-
-  it('falls back to cog when trueHeading is null', () => {
-    const vessels = new Map([
-      ['a', makeVessel({ cog: 90, trueHeading: null })],
     ]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(90);
   });
 
-  it('uses 0 rotation when both trueHeading and cog are null', () => {
+  it('falls back to trueHeading when cog is null', () => {
+    const vessels = new Map([
+      ['a', makeVessel({ cog: null, trueHeading: 180 })],
+    ]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.rotation).toBe(180);
+  });
+
+  it('treats trueHeading 511 as unavailable and falls back to cog', () => {
+    const vessels = new Map([
+      ['a', makeVessel({ cog: 90, trueHeading: 511 })],
+    ]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.rotation).toBe(90);
+  });
+
+  it('treats out-of-range COG as unavailable and falls back to trueHeading', () => {
+    const vessels = new Map([
+      ['a', makeVessel({ cog: 360, trueHeading: 270 })],
+    ]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.rotation).toBe(270);
+  });
+
+  it('uses 0 rotation when both cog and trueHeading are null', () => {
     const vessels = new Map([['a', makeVessel({ cog: null, trueHeading: null })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.rotation).toBe(0);
+  });
+
+  it('uses 0 rotation when both cog and trueHeading are out of range', () => {
+    const vessels = new Map([['a', makeVessel({ cog: 360, trueHeading: 511 })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(0);
   });
@@ -120,5 +142,30 @@ describe('buildFeatureCollection', () => {
     const vessels = new Map([['a', makeVessel({ navStatus: null, sog: 0.1 })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.markerShape).toBe('circle');
+  });
+
+  it('includes occurredAt in feature properties', () => {
+    const ts = '2025-06-01T10:00:00.000Z';
+    const vessels = new Map([['a', makeVessel({ occurredAt: ts })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.occurredAt).toBe(ts);
+  });
+
+  it('occurredAt is null when not set', () => {
+    const vessels = new Map([['a', makeVessel({ occurredAt: null })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.occurredAt).toBeNull();
+  });
+
+  it('includes vesselName in feature properties', () => {
+    const vessels = new Map([['a', makeVessel({ name: 'EVER GIVEN' })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.vesselName).toBe('EVER GIVEN');
+  });
+
+  it('vesselName is null when name is not set', () => {
+    const vessels = new Map([['a', makeVessel({ name: null })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.vesselName).toBeNull();
   });
 });
