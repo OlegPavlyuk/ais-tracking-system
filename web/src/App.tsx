@@ -7,6 +7,7 @@ import { useVesselClick } from './map/useVesselClick';
 import { StatusPill } from './components/StatusPill';
 import { CoverageBanner } from './components/CoverageBanner';
 import { VesselDetailPanel } from './components/VesselDetailPanel';
+import { MapLegend } from './components/MapLegend';
 import { useVesselsStore } from './store/vessels';
 import { useDebouncedBbox } from './hooks/useDebouncedBbox';
 import { ApiError, fetchSnapshot } from './api/client';
@@ -171,6 +172,7 @@ export function App() {
       <MapView onReady={setMap} />
       <StatusPill />
       <CoverageBanner />
+      <MapLegend />
       {selectedMmsi && (
         <VesselDetailPanel mmsi={selectedMmsi} onClose={() => setSelectedMmsi(null)} />
       )}

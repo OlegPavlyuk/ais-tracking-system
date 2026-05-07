@@ -1,26 +1,13 @@
 import { useEffect } from 'react';
 import type { Map as MlMap, GeoJSONSource } from 'maplibre-gl';
 import { useVesselsStore } from '@/store/vessels';
-import type { Vessel } from '@/store/types';
+import { buildFeatureCollection } from './buildFeatureCollection';
 import { MapViewIds } from './MapView';
 
+export { buildFeatureCollection } from './buildFeatureCollection';
+export type { VesselFeatureCollection } from './buildFeatureCollection';
+
 const FLUSH_MS = 100;
-
-interface VesselFeatureProps {
-  mmsi: string;
-  rotation: number;
-}
-
-interface VesselFeature {
-  type: 'Feature';
-  geometry: { type: 'Point'; coordinates: [number, number] };
-  properties: VesselFeatureProps;
-}
-
-export interface VesselFeatureCollection {
-  type: 'FeatureCollection';
-  features: VesselFeature[];
-}
 
 export function useVesselsLayer(map: MlMap | null): void {
   useEffect(() => {
@@ -71,20 +58,4 @@ export function useVesselsLayer(map: MlMap | null): void {
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [map]);
-}
-
-export function buildFeatureCollection(
-  vessels: ReadonlyMap<string, Vessel>,
-): VesselFeatureCollection {
-  const features: VesselFeature[] = [];
-  for (const v of vessels.values()) {
-    if (v.lat === null || v.lon === null) continue;
-    const rotation = v.cog ?? v.trueHeading ?? 0;
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
-      properties: { mmsi: v.mmsi, rotation },
-    });
-  }
-  return { type: 'FeatureCollection', features };
 }

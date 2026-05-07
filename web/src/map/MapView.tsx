@@ -10,10 +10,13 @@ const VESSELS_LAYER_ID = 'vessels';
 const COVERAGE_SOURCE_ID = 'coverage-area';
 const COVERAGE_LAYER_ID = 'coverage-area-outline';
 
-// Inline 24x24 north-pointing arrow. Rasterized via map.addImage for the symbol layer.
-const VESSEL_SVG = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <path d="M12 2 L18 20 L12 16 L6 20 Z" fill="#22d3ee" stroke="#0f172a" stroke-width="1.5" stroke-linejoin="round"/>
+// Rendered at 48×48 internal resolution with pixelRatio:2 so MapLibre displays it
+// at 24 CSS px — same visible size as before but 2× the sampling precision for
+// crisper SDF edges. Path is the original 24×24 arrow scaled 2× to match viewBox.
+const VESSEL_ICON_SIZE = 48;
+const VESSEL_ICON_PIXEL_RATIO = 2;
+const VESSEL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${VESSEL_ICON_SIZE}" height="${VESSEL_ICON_SIZE}" viewBox="0 0 48 48">
+  <path d="M24 3 L38 42 L24 33 L10 42 Z" fill="white"/>
 </svg>`;
 
 interface MapViewProps {
@@ -75,11 +78,11 @@ function registerVesselIcon(map: MlMap): Promise<void> {
   const blob = new Blob([VESSEL_SVG], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
   return new Promise<void>((resolve, reject) => {
-    const img = new Image(24, 24);
+    const img = new Image(VESSEL_ICON_SIZE, VESSEL_ICON_SIZE);
     img.onload = () => {
       try {
         if (!map.hasImage(VESSEL_ICON_ID)) {
-          map.addImage(VESSEL_ICON_ID, img, { pixelRatio: 1 });
+          map.addImage(VESSEL_ICON_ID, img, { pixelRatio: VESSEL_ICON_PIXEL_RATIO, sdf: true });
         }
         resolve();
       } catch (err) {
@@ -115,6 +118,9 @@ function addVesselsLayer(map: MlMap): void {
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-size': 1,
+      },
+      paint: {
+        'icon-color': ['get', 'color'],
       },
     });
   }
