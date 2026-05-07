@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import type { Map as MlMap, GeoJSONSource } from 'maplibre-gl';
 import { useVesselsStore } from '@/store/vessels';
 import { buildFeatureCollection } from './buildFeatureCollection';
-import { MapViewIds } from './MapView';
+import { MapViewIds } from './mapViewIds';
 
 export { buildFeatureCollection } from './buildFeatureCollection';
 export type { VesselFeatureCollection } from './buildFeatureCollection';

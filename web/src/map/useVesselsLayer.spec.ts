@@ -52,15 +52,23 @@ describe('buildFeatureCollection', () => {
     expect(fc.features[0]!.properties.color).toBe('#95A5A6');
   });
 
-  it('falls back to trueHeading when cog is null', () => {
+  it('prefers trueHeading over cog for rotation', () => {
     const vessels = new Map([
-      ['a', makeVessel({ cog: null, trueHeading: 180 })],
+      ['a', makeVessel({ cog: 90, trueHeading: 180 })],
     ]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(180);
   });
 
-  it('uses 0 rotation when both cog and trueHeading are null', () => {
+  it('falls back to cog when trueHeading is null', () => {
+    const vessels = new Map([
+      ['a', makeVessel({ cog: 90, trueHeading: null })],
+    ]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.rotation).toBe(90);
+  });
+
+  it('uses 0 rotation when both trueHeading and cog are null', () => {
     const vessels = new Map([['a', makeVessel({ cog: null, trueHeading: null })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(0);
@@ -70,5 +78,47 @@ describe('buildFeatureCollection', () => {
     const vessels = new Map([['a', makeVessel({ lon: 33.5, lat: 44.2 })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.geometry.coordinates).toEqual([33.5, 44.2]);
+  });
+
+  it('includes readable navStatusLabel in properties', () => {
+    const vessels = new Map([['a', makeVessel({ navStatus: 0 })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.navStatusLabel).toBe('Under way (engine)');
+  });
+
+  it('navStatusLabel is — when navStatus is null', () => {
+    const vessels = new Map([['a', makeVessel({ navStatus: null })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.navStatusLabel).toBe('—');
+  });
+
+  it('sets markerShape to circle for At anchor (1)', () => {
+    const vessels = new Map([['a', makeVessel({ navStatus: 1 })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.markerShape).toBe('circle');
+  });
+
+  it('sets markerShape to circle for Moored (5)', () => {
+    const vessels = new Map([['a', makeVessel({ navStatus: 5 })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.markerShape).toBe('circle');
+  });
+
+  it('sets markerShape to circle for Aground (6)', () => {
+    const vessels = new Map([['a', makeVessel({ navStatus: 6 })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.markerShape).toBe('circle');
+  });
+
+  it('sets markerShape to arrow for underway vessels', () => {
+    const vessels = new Map([['a', makeVessel({ navStatus: 0, sog: 10 })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.markerShape).toBe('arrow');
+  });
+
+  it('sets markerShape to circle via SOG fallback when navStatus is null and SOG ≤ 0.3', () => {
+    const vessels = new Map([['a', makeVessel({ navStatus: null, sog: 0.1 })]]);
+    const fc = buildFeatureCollection(vessels);
+    expect(fc.features[0]!.properties.markerShape).toBe('circle');
   });
 });

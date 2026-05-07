@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchVesselDetail } from '@/api/client';
 import { useVesselsStore } from '@/store/vessels';
 import { shipTypeLabel } from '@/lib/shipTypeLabel';
+import { navStatusLabel } from '@/lib/navStatusLabel';
 import type { VesselDetailRow, VesselSanctionMatch } from '@/store/types';
 
 interface Props {
@@ -189,7 +190,7 @@ export function VesselDetailPanel({ mmsi, onClose }: Props) {
           <Field label="Heading" value={inViewport ? fmtDeg(vessel!.trueHeading) : '—'} />
           <Field
             label="Nav status"
-            value={inViewport && vessel!.navStatus !== null ? String(vessel!.navStatus) : '—'}
+            value={inViewport ? navStatusLabel(vessel!.navStatus) : '—'}
           />
         </section>
 

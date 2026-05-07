@@ -1,11 +1,15 @@
 import type { Vessel } from '@/store/types';
 import { shipTypeColor } from '@/lib/shipTypeColor';
+import { navStatusLabel } from '@/lib/navStatusLabel';
+import { markerShape } from '@/lib/markerShape';
 
 export interface VesselFeatureProps {
   mmsi: string;
   rotation: number;
   shipType: number | null;
   color: string;
+  navStatusLabel: string;
+  markerShape: 'arrow' | 'circle';
 }
 
 export interface VesselFeature {
@@ -25,7 +29,7 @@ export function buildFeatureCollection(
   const features: VesselFeature[] = [];
   for (const v of vessels.values()) {
     if (v.lat === null || v.lon === null) continue;
-    const rotation = v.cog ?? v.trueHeading ?? 0;
+    const rotation = v.trueHeading ?? v.cog ?? 0;
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
@@ -34,6 +38,8 @@ export function buildFeatureCollection(
         rotation,
         shipType: v.shipType,
         color: shipTypeColor(v.shipType),
+        navStatusLabel: navStatusLabel(v.navStatus),
+        markerShape: markerShape(v.navStatus, v.sog),
       },
     });
   }
