@@ -4,7 +4,11 @@ import { Counter } from 'prom-client';
 import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 import { ConfigService } from '../../shared/config/config.service';
-import { BLACK_SEA_BBOX } from '../../shared/config/constants';
+import {
+  AIS_COVERAGE_BBOXES,
+  AIS_COVERAGE_ZONES,
+  toAisStreamBoundingBox,
+} from '../../shared/config/constants';
 import { RawProviderMessage } from '../../contracts';
 import {
   AIS_MESSAGES_DROPPED_TOTAL,
@@ -100,16 +104,13 @@ export class AisStreamAdapter implements AisProviderAdapter {
     socket.on('open', () => {
       const sub = {
         APIKey: this.apiKey,
-        BoundingBoxes: [
-          [
-            [BLACK_SEA_BBOX.minLat, BLACK_SEA_BBOX.minLon],
-            [BLACK_SEA_BBOX.maxLat, BLACK_SEA_BBOX.maxLon],
-          ],
-        ],
+        BoundingBoxes: AIS_COVERAGE_BBOXES.map(toAisStreamBoundingBox),
         FilterMessageTypes: AISSTREAM_ACCEPTED_MESSAGE_TYPES,
       };
       socket.send(JSON.stringify(sub));
-      this.logger.log('AISStream subscribed to Black Sea bbox');
+      this.logger.log(
+        `AISStream subscribed to ${AIS_COVERAGE_BBOXES.length} coverage bboxes (${AIS_COVERAGE_ZONES.map((zone) => zone.name).join(', ')})`,
+      );
     });
 
     socket.on('message', (data) => {

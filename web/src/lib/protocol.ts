@@ -38,13 +38,4 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
 
 export type ServerMessageParsed = z.infer<typeof ServerMessageSchema>;
 
-export type Bbox = {
-  minLon: number;
-  minLat: number;
-  maxLon: number;
-  maxLat: number;
-};
-
-export type ClientMessage =
-  | { type: 'subscribe'; bbox: Bbox }
-  | { type: 'update_subscription'; bbox: Bbox };
+export type ClientMessage = { type: 'subscribe' };

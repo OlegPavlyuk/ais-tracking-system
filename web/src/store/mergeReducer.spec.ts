@@ -130,14 +130,14 @@ describe('applyStatic', () => {
 });
 
 describe('applySnapshotRows', () => {
-  it('drops vessels not present in the snapshot', () => {
+  it('preserves vessels not present in a limited snapshot', () => {
     const seeded = new Map<string, Vessel>([
       [MMSI_A, emptyVessel(MMSI_A)],
       [MMSI_B, emptyVessel(MMSI_B)],
     ]);
     const next = applySnapshotRows(seeded, [snapshotRow()]);
     expect(next.has(MMSI_A)).toBe(true);
-    expect(next.has(MMSI_B)).toBe(false);
+    expect(next.has(MMSI_B)).toBe(true);
   });
 
   it('does not overwrite WS-derived position when WS occurredAt is newer than snapshot occurredAt', () => {
@@ -167,6 +167,13 @@ describe('applySnapshotRows', () => {
     // Profile fields and vesselId still merge in.
     expect(v.vesselId).toBe('vessel-a');
     expect(v.name).toBe('ALPHA');
+  });
+
+  it('updates lastSeenAt from snapshot rows for explicit aging decisions', () => {
+    const next = applySnapshotRows(new Map(), [
+      snapshotRow({ lastSeenAt: '2024-01-01T00:20:00.000Z' }),
+    ]);
+    expect((next.get(MMSI_A) as Vessel).lastSeenAt).toBe('2024-01-01T00:20:00.000Z');
   });
 
   it('uses AIS occurredAt (not DB lastSeenAt) for position freshness', () => {
@@ -243,6 +250,34 @@ describe('applySnapshotRows', () => {
   it('always sets vesselId from the snapshot row', () => {
     const next = applySnapshotRows(new Map(), [snapshotRow({ id: 'v-42' })]);
     expect((next.get(MMSI_A) as Vessel).vesselId).toBe('v-42');
+  });
+});
+
+describe('pruneStaleVessels', () => {
+  it('keeps vessels whose lastSeenAt is within the retention window', async () => {
+    const { pruneStaleVessels, SNAPSHOT_RETENTION_MS } = await import('./mergeReducer');
+    const now = Date.parse('2024-01-02T00:00:00.000Z');
+    const seeded = new Map<string, Vessel>([
+      [
+        MMSI_A,
+        { ...emptyVessel(MMSI_A), lastSeenAt: '2024-01-01T12:00:00.000Z' },
+      ],
+    ]);
+    const next = pruneStaleVessels(seeded, now, SNAPSHOT_RETENTION_MS);
+    expect(next.has(MMSI_A)).toBe(true);
+  });
+
+  it('removes vessels older than the explicit retention window', async () => {
+    const { pruneStaleVessels, SNAPSHOT_RETENTION_MS } = await import('./mergeReducer');
+    const now = Date.parse('2024-01-03T00:00:00.000Z');
+    const seeded = new Map<string, Vessel>([
+      [
+        MMSI_A,
+        { ...emptyVessel(MMSI_A), lastSeenAt: '2024-01-01T00:00:00.000Z' },
+      ],
+    ]);
+    const next = pruneStaleVessels(seeded, now, SNAPSHOT_RETENTION_MS);
+    expect(next.has(MMSI_A)).toBe(false);
   });
 });
 

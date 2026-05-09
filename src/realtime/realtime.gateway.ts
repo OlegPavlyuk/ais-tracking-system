@@ -14,7 +14,7 @@ import {
   WS_CONNECTIONS_ACTIVE,
   WS_MESSAGES_DROPPED_TOTAL,
   WS_MESSAGES_SENT_TOTAL,
-  WS_SUBSCRIBER_BBOX_UPDATES_TOTAL,
+  WS_SUBSCRIPTIONS_ACCEPTED_TOTAL,
 } from '../shared/metrics/ws-metrics';
 import { ClientMessageSchema, ServerMessage } from './protocol';
 import { SendQueue } from './send-queue';
@@ -43,7 +43,8 @@ export class RealtimeGateway implements OnApplicationBootstrap, OnModuleDestroy 
     @InjectMetric(WS_CONNECTIONS_ACTIVE) private readonly connectionsActive: Gauge<string>,
     @InjectMetric(WS_MESSAGES_SENT_TOTAL) private readonly messagesSent: Counter<'kind'>,
     @InjectMetric(WS_MESSAGES_DROPPED_TOTAL) private readonly messagesDropped: Counter<'reason'>,
-    @InjectMetric(WS_SUBSCRIBER_BBOX_UPDATES_TOTAL) private readonly bboxUpdates: Counter<string>,
+    @InjectMetric(WS_SUBSCRIPTIONS_ACCEPTED_TOTAL)
+    private readonly subscriptionsAccepted: Counter<string>,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -154,8 +155,8 @@ export class RealtimeGateway implements OnApplicationBootstrap, OnModuleDestroy 
       );
       return;
     }
-    this.subs.set(conn.id, result.data.bbox);
-    this.bboxUpdates.inc();
+    this.subs.add(conn.id);
+    this.subscriptionsAccepted.inc();
   }
 
   private tickHeartbeat(): void {

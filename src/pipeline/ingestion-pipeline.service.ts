@@ -4,7 +4,11 @@ import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter } from 'prom-client';
 import { PinoLogger } from 'nestjs-pino';
 import { EVENT_BUS, EventBus } from '../shared/bus/event-bus';
-import { AIS_EVENTS_STREAM } from '../shared/config/constants';
+import {
+  AIS_COVERAGE_BBOXES,
+  AIS_EVENTS_STREAM,
+  pointInAnyBbox,
+} from '../shared/config/constants';
 import {
   AIS_MESSAGES_DROPPED_TOTAL,
   DropReason,
@@ -63,6 +67,10 @@ export class IngestionPipelineService implements OnModuleInit {
     }
     if (!(await this.dedup.shouldAccept(event.mmsi, event.occurredAt))) {
       this.drop('duplicate');
+      return;
+    }
+    if (event.kind === 'position' && !pointInAnyBbox(event.lat, event.lon, AIS_COVERAGE_BBOXES)) {
+      this.drop('out_of_bbox');
       return;
     }
     if (event.kind === 'position' && !(await this.sampler.shouldEmit(event))) {

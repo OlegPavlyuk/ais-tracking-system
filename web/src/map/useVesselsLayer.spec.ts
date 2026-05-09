@@ -6,6 +6,7 @@ function makeVessel(overrides: Partial<Vessel> = {}): Vessel {
   return {
     mmsi: '123456789',
     vesselId: null,
+    lastSeenAt: null,
     lat: 43.0,
     lon: 33.0,
     sog: null,

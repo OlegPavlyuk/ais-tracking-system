@@ -7,10 +7,13 @@ import type {
   VesselSanctionMatch,
 } from './types';
 
+export const SNAPSHOT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
 export function emptyVessel(mmsi: string): Vessel {
   return {
     mmsi,
     vesselId: null,
+    lastSeenAt: null,
     lat: null,
     lon: null,
     sog: null,
@@ -41,17 +44,28 @@ function preferNonNull<T>(incoming: T | null | undefined, current: T | null): T 
   return incoming;
 }
 
+function maxTimestamp(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return Date.parse(a) >= Date.parse(b) ? a : b;
+}
+
+function vesselActivityAt(vessel: Vessel): string | null {
+  return vessel.lastSeenAt ?? vessel.occurredAt ?? vessel.staticOccurredAt;
+}
+
 export function applySnapshotRows(
   prev: ReadonlyMap<string, Vessel>,
   rows: readonly SnapshotRow[],
 ): Map<string, Vessel> {
-  const next = new Map<string, Vessel>();
+  const next = new Map(prev);
   for (const row of rows) {
     const existing = prev.get(row.mmsi);
     const base = existing ?? emptyVessel(row.mmsi);
     const merged: Vessel = { ...base };
 
     merged.vesselId = row.id;
+    merged.lastSeenAt = maxTimestamp(base.lastSeenAt, row.lastSeenAt);
 
     // Compare AIS event times (occurredAt). lastSeenAt is a DB write timestamp
     // and would let a stale snapshot clobber a newer WS-derived position.
@@ -95,6 +109,7 @@ export function applyPosition(
     trueHeading: ev.trueHeading ?? null,
     navStatus: ev.navStatus ?? null,
     occurredAt: ev.occurredAt,
+    lastSeenAt: maxTimestamp(base.lastSeenAt, ev.ingestedAt),
     name: preferNonNull(ev.shipName, base.name),
   });
   return next;
@@ -148,4 +163,22 @@ export function applyEnriched(
     sanctionsMatches: matches,
   });
   return next;
+}
+
+export function pruneStaleVessels(
+  prev: ReadonlyMap<string, Vessel>,
+  now = Date.now(),
+  maxAgeMs = SNAPSHOT_RETENTION_MS,
+): Map<string, Vessel> {
+  let changed = false;
+  const next = new Map<string, Vessel>();
+  for (const [mmsi, vessel] of prev) {
+    const activityAt = vesselActivityAt(vessel);
+    if (activityAt && now - Date.parse(activityAt) > maxAgeMs) {
+      changed = true;
+      continue;
+    }
+    next.set(mmsi, vessel);
+  }
+  return changed ? next : (prev as Map<string, Vessel>);
 }

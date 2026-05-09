@@ -11,6 +11,7 @@ export interface VesselSanctionMatch {
 export interface Vessel {
   mmsi: string;
   vesselId: string | null;
+  lastSeenAt: string | null;
 
   lat: number | null;
   lon: number | null;

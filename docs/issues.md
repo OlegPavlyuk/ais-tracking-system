@@ -50,7 +50,7 @@ None — can start immediately.
 The thinnest end-to-end path. Connect to AISStream, accept position messages
 inside the Black Sea bbox, normalize to canonical events, publish to
 `ais.events.v1`, persist to `vessel_positions_latest` (and create the
-`vessels` row on first sight), and serve them via `GET /api/vessels?bbox=...`.
+`vessels` row on first sight), and serve them via `GET /api/vessels`.
 No dedup/sampling, no transaction guarantees yet, no static events.
 
 ### Acceptance criteria
@@ -61,8 +61,7 @@ No dedup/sampling, no transaction guarantees yet, no static events.
 - [x] `EventBus` publishes events to `ais.events.v1` (Redis Streams).
 - [x] `StorageWriterConsumer` consumer-group worker INSERTs/UPSERTs into `vessels` and `vessel_positions_latest`.
 - [x] `vessels` schema has UUID PK, indexed `mmsi` unique and `imo` nullable; `vessel_positions_latest` has `position geometry(Point, 4326)` with GIST index, plus `last_seen_at`.
-- [x] `GET /api/vessels?bbox=minLon,minLat,maxLon,maxLat` returns vessels in the bbox, joined to profile fields, filtered by `last_seen_at`.
-- [x] Out-of-Black-Sea bbox returns `BBOX_OUT_OF_SCOPE` error envelope.
+- [x] `GET /api/vessels` returns the latest supported-coverage snapshot, joined to profile fields and filtered by `last_seen_at`.
 - [x] Live AIS data is queryable via curl within seconds of stream start.
 - [x] Unit tests cover `RawFilter` and `Normalizer` against fixture data in `aisstream/`.
 
@@ -158,15 +157,15 @@ or simplified LineString.
 
 ### What to build
 
-`/ws/positions` endpoint, mutable bbox per connection, fanout consumer that
-filters events by each connection's bbox, bounded send queue with drop-oldest
-on overflow, 30-second heartbeat.
+`/ws/positions` endpoint, global subscribe semantics per connection, fanout
+consumer that broadcasts the backend-supported realtime feed to subscribed
+clients, bounded send queue with drop-oldest on overflow, 30-second heartbeat.
 
 ### Acceptance criteria
 
-- [x] `RealtimeGateway` accepts `subscribe` and `update_subscription` messages.
-- [x] `SubscriptionService` holds in-memory `connectionId → bbox` map.
-- [x] `FanoutConsumer` consumer-group worker for `ais.events.v1` filters and routes to matching connections.
+- [x] `RealtimeGateway` accepts `subscribe` messages.
+- [x] `SubscriptionService` holds the subscribed connection set in memory.
+- [x] `FanoutConsumer` consumer-group worker for `ais.events.v1` routes the backend-supported realtime feed to subscribed connections.
 - [x] Server emits `position`, `static`, `vessel.enriched`, and `error` typed messages. (`vessel.enriched` slot defined; not emitted until slice #8.)
 - [x] Per-connection bounded queue (configurable) with drop-oldest-position-per-vessel under overflow; static and enriched events never dropped.
 - [x] 30s heartbeat ping; non-responsive clients disconnected.
@@ -358,18 +357,16 @@ Grafana dashboard JSON loaded automatically by the Grafana container.
 ### What to build
 
 MapLibre-based React app rendering vessels in the current viewport. Loads
-snapshot via REST on mount and after significant viewport change. Opens
-single WS connection; sends `subscribe` on connect and `update_subscription`
-on debounced `moveend`/`zoomend`.
+snapshot via REST once on mount, keeps it in the frontend store, and applies
+incremental WebSocket updates. Opens single WS connection; sends `subscribe`
+on connect.
 
 ### Acceptance criteria
 
-- [x] Map mounts and loads snapshot from `GET /api/vessels?bbox=`.
+- [x] Map mounts and loads snapshot from `GET /api/vessels`.
 - [x] WS connection opens to `/ws/positions`, sends `subscribe` with current bbox.
-- [x] `moveend`/`zoomend` triggers debounced `update_subscription` plus a fresh REST snapshot.
 - [x] Live `position` events update vessel markers in place; `static` events update vessel meta.
 - [x] Reconnect handled cleanly when WS drops.
-- [x] Out-of-Black-Sea bbox handled by error envelope display.
 - [x] Lightweight component tests for the bbox-debounce hook.
 
 ### Blocked by

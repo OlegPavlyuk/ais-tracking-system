@@ -1,40 +1,108 @@
 import { VesselsController } from './vessels.controller';
-import { VesselDetailRow, VesselsRepository } from '../storage/vessels.repository';
+import {
+  VesselDetailRow,
+  VesselsRepository,
+  VesselSnapshotRow,
+} from '../storage/vessels.repository';
 import { ApiError } from '../shared/errors/api-error';
+import { AIS_COVERAGE_BBOXES } from '../shared/config/constants';
 
 describe('VesselsController', () => {
   function makeController() {
     const repo = {
-      findInBbox: jest.fn().mockResolvedValue([]),
+      findLatestInBboxes: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue(null),
       findTrack: jest.fn().mockResolvedValue({ kind: 'points', points: [] }),
     } as unknown as VesselsRepository;
     return { controller: new VesselsController(repo), repo };
   }
 
-  it('returns vessels for an in-scope bbox', async () => {
+  function snapshotRow(
+    mmsi: string,
+    lastSeenAt: string,
+    overrides: Partial<VesselSnapshotRow> = {},
+  ): VesselSnapshotRow {
+    return {
+      id: `vessel-${mmsi}`,
+      mmsi,
+      imo: null,
+      name: null,
+      callSign: null,
+      shipType: null,
+      lon: 30,
+      lat: 40,
+      sog: null,
+      cog: null,
+      trueHeading: null,
+      navStatus: null,
+      occurredAt: lastSeenAt,
+      lastSeenAt,
+      ...overrides,
+    };
+  }
+
+  it('returns all latest vessels inside supported coverage', async () => {
     const { controller, repo } = makeController();
-    const result = await controller.list({ bbox: '28,41,42,47' });
-    expect(result).toEqual({ vessels: [] });
-    expect(repo.findInBbox).toHaveBeenCalledWith(
-      { minLon: 28, minLat: 41, maxLon: 42, maxLat: 47 },
+    (repo.findLatestInBboxes as jest.Mock).mockResolvedValue([
+      snapshotRow('111111111', '2026-05-09T09:00:00.000Z'),
+      snapshotRow('222222222', '2026-05-09T08:00:00.000Z'),
+    ]);
+    const result = await controller.latestSnapshot({});
+    expect(result).toEqual({
+      vessels: [
+        snapshotRow('111111111', '2026-05-09T09:00:00.000Z'),
+        snapshotRow('222222222', '2026-05-09T08:00:00.000Z'),
+      ],
+    });
+    expect(repo.findLatestInBboxes).toHaveBeenCalledWith(
+      AIS_COVERAGE_BBOXES,
       24 * 60 * 60 * 1000,
-      2000,
+      10000,
     );
   });
 
-  it('rejects out-of-Black-Sea bbox with BBOX_OUT_OF_SCOPE', async () => {
+  it('accepts a larger latest snapshot limit up to 30000', async () => {
+    const { controller, repo } = makeController();
+    await controller.latestSnapshot({ limit: '30000' });
+    expect(repo.findLatestInBboxes).toHaveBeenCalledWith(
+      AIS_COVERAGE_BBOXES,
+      24 * 60 * 60 * 1000,
+      30000,
+    );
+  });
+
+  it('accepts a custom staleness window for the latest snapshot', async () => {
+    const { controller, repo } = makeController();
+    await controller.latestSnapshot({ staleMinutes: '30' });
+    expect(repo.findLatestInBboxes).toHaveBeenCalledWith(
+      AIS_COVERAGE_BBOXES,
+      30 * 60 * 1000,
+      10000,
+    );
+  });
+
+  it('rejects invalid latest query params with INVALID_QUERY', async () => {
     const { controller } = makeController();
-    await expect(controller.list({ bbox: '0,0,10,10' })).rejects.toMatchObject({
-      response: { error: { code: 'BBOX_OUT_OF_SCOPE' } },
+    await expect(controller.latestSnapshot({ limit: '0' })).rejects.toMatchObject({
+      response: { error: { code: 'INVALID_QUERY' } },
       status: 400,
     });
   });
 
-  it('rejects malformed bbox with INVALID_QUERY', async () => {
+  it('rejects stale bbox query params instead of silently ignoring them', async () => {
     const { controller } = makeController();
-    await expect(controller.list({ bbox: 'nope' })).rejects.toBeInstanceOf(ApiError);
-    await expect(controller.list({ bbox: '42,47,28,41' })).rejects.toMatchObject({
+    await expect(
+      controller.latestSnapshot({ bbox: '27,40.5,42.5,47.5' }),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'INVALID_QUERY' } },
+      status: 400,
+    });
+  });
+
+  it('rejects malformed latest query with INVALID_QUERY', async () => {
+    const { controller } = makeController();
+    await expect(controller.latestSnapshot({ staleMinutes: '0' })).rejects.toBeInstanceOf(ApiError);
+    await expect(controller.latestSnapshot({ limit: 'nope' })).rejects.toMatchObject({
       response: { error: { code: 'INVALID_QUERY' } },
     });
   });

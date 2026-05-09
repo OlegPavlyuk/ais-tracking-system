@@ -1,39 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { Bbox } from '../shared/config/constants';
 
 @Injectable()
 export class SubscriptionService {
-  private readonly bboxes = new Map<string, Bbox>();
+  private readonly connectionIds = new Set<string>();
 
-  set(connectionId: string, bbox: Bbox): void {
-    this.bboxes.set(connectionId, bbox);
+  add(connectionId: string): void {
+    this.connectionIds.add(connectionId);
   }
 
   remove(connectionId: string): void {
-    this.bboxes.delete(connectionId);
+    this.connectionIds.delete(connectionId);
   }
 
-  get(connectionId: string): Bbox | undefined {
-    return this.bboxes.get(connectionId);
-  }
-
-  size(): number {
-    return this.bboxes.size;
-  }
-
-  /** Connection IDs whose bbox contains the given point. */
-  matchPosition(lat: number, lon: number): string[] {
-    const out: string[] = [];
-    for (const [id, b] of this.bboxes) {
-      if (lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat) {
-        out.push(id);
-      }
+  forEachSubscribed(visitor: (connectionId: string) => void): void {
+    for (const connectionId of this.connectionIds) {
+      visitor(connectionId);
     }
-    return out;
-  }
-
-  /** Static events have no lat/lon; fan to every subscribed connection. */
-  allSubscribed(): string[] {
-    return Array.from(this.bboxes.keys());
   }
 }

@@ -5,6 +5,7 @@ import { markerShape } from '@/lib/markerShape';
 
 export interface VesselFeatureProps {
   mmsi: string;
+  vesselId: string | null;
   vesselName: string | null;
   rotation: number;
   shipType: number | null;
@@ -42,6 +43,7 @@ export function buildFeatureCollection(
       geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
       properties: {
         mmsi: v.mmsi,
+        vesselId: v.vesselId,
         vesselName: v.name,
         rotation,
         shipType: v.shipType,

@@ -7,6 +7,7 @@ import type { VesselDetailRow, VesselSanctionMatch } from '@/store/types';
 
 interface Props {
   mmsi: string;
+  vesselId?: string | null;
   onClose: () => void;
 }
 
@@ -74,9 +75,9 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   );
 }
 
-export function VesselDetailPanel({ mmsi, onClose }: Props) {
+export function VesselDetailPanel({ mmsi, vesselId: initialVesselId = null, onClose }: Props) {
   const vessel = useVesselsStore((s) => s.vessels.get(mmsi));
-  const vesselId = vessel?.vesselId ?? null;
+  const vesselId = vessel?.vesselId ?? initialVesselId;
 
   const { data: queryData, isLoading } = useQuery({
     queryKey: ['vessel-detail', vesselId],
@@ -96,7 +97,15 @@ export function VesselDetailPanel({ mmsi, onClose }: Props) {
       ? vessel.sanctionsMatches
       : (queryData?.sanctionsMatches ?? []);
 
-  const inViewport = vessel !== undefined;
+  const isInStore = vessel !== undefined;
+  const livePosition = vessel
+    ? {
+        sog: vessel.sog,
+        cog: vessel.cog,
+        trueHeading: vessel.trueHeading,
+        navStatus: vessel.navStatus,
+      }
+    : queryData?.position ?? null;
 
   const name = vessel?.name ?? queryData?.name;
   const headerTitle = name ?? `MMSI ${mmsi}`;
@@ -137,15 +146,14 @@ export function VesselDetailPanel({ mmsi, onClose }: Props) {
       </div>
 
       <div className="flex-1 px-4 py-3 space-y-4">
-        {/* Outside viewport indicator */}
-        {!inViewport && (
+        {!isInStore && (
           <div className="rounded bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-            Vessel is outside the current viewport.
+            Live vessel data is not currently available in the local store.
           </div>
         )}
 
         {/* mmsi-only fallback (state 2) */}
-        {inViewport && vesselId === null && (
+        {isInStore && vesselId === null && (
           <p className="text-sm text-gray-500">Full vessel profile is not available yet.</p>
         )}
 
@@ -185,12 +193,15 @@ export function VesselDetailPanel({ mmsi, onClose }: Props) {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
             Live position
           </h3>
-          <Field label="SOG" value={inViewport ? fmt(vessel!.sog, 'kn') : '—'} />
-          <Field label="COG" value={inViewport ? fmtDeg(vessel!.cog) : '—'} />
-          <Field label="Heading" value={inViewport ? fmtDeg(vessel!.trueHeading) : '—'} />
+          <Field label="SOG" value={livePosition ? fmt(livePosition.sog, 'kn') : '—'} />
+          <Field label="COG" value={livePosition ? fmtDeg(livePosition.cog) : '—'} />
+          <Field
+            label="Heading"
+            value={livePosition ? fmtDeg(livePosition.trueHeading) : '—'}
+          />
           <Field
             label="Nav status"
-            value={inViewport ? navStatusLabel(vessel!.navStatus) : '—'}
+            value={livePosition ? navStatusLabel(livePosition.navStatus) : '—'}
           />
         </section>
 

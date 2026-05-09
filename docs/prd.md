@@ -141,9 +141,9 @@ microservice-extraction path tomorrow.
 40. As a frontend developer, I want bbox queries outside the Black Sea region
     to return an explicit `BBOX_OUT_OF_SCOPE` error rather than an empty list,
     so that misconfigured clients fail loudly.
-41. As a frontend developer, I want the system to debounce well to my
-    `moveend`/`zoomend`-driven `update_subscription` messages, so that rapid
-    panning does not cause server-side churn.
+41. As a frontend developer, I want pan/zoom to affect only camera state, so
+    that rapid panning does not cause server-side churn or data ownership
+    changes.
 42. As a system operator, I want slow WebSocket clients to have their oldest
     queued position events per vessel dropped under backpressure (but never
     static or enrichment events), so that one slow client cannot impact the
@@ -226,10 +226,10 @@ The PRD-relevant items:
 - `SanctionsImporter` — daily-scheduled BullMQ job per `SanctionsSourceAdapter`;
   upserts into `sanctioned_entities`; records `sanctions_import_runs`.
 - `RealtimeGateway` (NestJS `@WebSocketGateway`, raw `ws` adapter) —
-  handles `subscribe`/`update_subscription`, manages per-connection bbox map.
+  handles `subscribe`, manages the subscribed-connection set.
 - `FanoutConsumer` — consumer-group worker for `ais.events.v1` and
-  `vessel.enriched`; routes messages to connections whose bbox contains the
-  vessel.
+  `vessel.enriched`; routes the backend-supported realtime feed to subscribed
+  connections.
 - `AdminTokenGuard` — Nest guard enforcing `ADMIN_TOKEN` outside local dev.
 
 ### Architecture / cross-cutting
@@ -261,8 +261,8 @@ The PRD-relevant items:
 
 - REST: `GET /api/vessels`, `GET /api/vessels/:id`, `GET /api/vessels/:id/track`,
   `GET /api/sanctions/sources`, `GET /healthz`, `GET /readyz`, `GET /metrics`.
-- WebSocket `/ws/positions`: client `subscribe` / `update_subscription`;
-  server `position`, `static`, `vessel.enriched`, `error`.
+- WebSocket `/ws/positions`: client `subscribe`; server `position`, `static`,
+  `vessel.enriched`, `error`.
 - Admin (token-gated): DLQ list/replay, sanctions import list/run, stream
   inspection.
 - All input Zod-validated.

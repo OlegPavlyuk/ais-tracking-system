@@ -5,7 +5,10 @@ import { ConfigService } from '../../shared/config/config.service';
 import { AisStreamAdapter } from './aisstream.adapter';
 import { AISSTREAM_ACCEPTED_MESSAGE_TYPES } from './aisstream.message-types';
 import { AisStreamRawFilter } from './aisstream.raw-filter';
-import { BLACK_SEA_BBOX } from '../../shared/config/constants';
+import {
+  AIS_COVERAGE_BBOXES,
+  toAisStreamBoundingBox,
+} from '../../shared/config/constants';
 
 class FakeSocket extends EventEmitter {
   send = jest.fn();
@@ -183,22 +186,15 @@ describe('AisStreamAdapter', () => {
     expect(sockets[0]!.send).toHaveBeenCalledTimes(1);
     const sub = JSON.parse(sockets[0]!.send.mock.calls[0][0] as string);
     expect(sub.APIKey).toBe('test-key');
-    expect(sub.BoundingBoxes).toEqual([
-      [
-        [BLACK_SEA_BBOX.minLat, BLACK_SEA_BBOX.minLon],
-        [BLACK_SEA_BBOX.maxLat, BLACK_SEA_BBOX.maxLon],
-      ],
-    ]);
+    expect(sub.BoundingBoxes).toEqual(AIS_COVERAGE_BBOXES.map(toAisStreamBoundingBox));
     expect(sub.FilterMessageTypes).toEqual(AISSTREAM_ACCEPTED_MESSAGE_TYPES);
-    // Sanity: each corner's first element is a latitude (|lat| <= 90) and second
-    // is a longitude (|lon| <= 180) — but for the Black Sea, |lat| < |lon| is
-    // impossible since both are in (27, 47), so we rely on the explicit equality
-    // above and on the constant being well-formed.
-    for (const corner of sub.BoundingBoxes[0]) {
-      expect(corner[0]).toBeGreaterThanOrEqual(-90);
-      expect(corner[0]).toBeLessThanOrEqual(90);
-      expect(corner[1]).toBeGreaterThanOrEqual(-180);
-      expect(corner[1]).toBeLessThanOrEqual(180);
+    for (const bbox of sub.BoundingBoxes) {
+      for (const corner of bbox) {
+        expect(corner[0]).toBeGreaterThanOrEqual(-90);
+        expect(corner[0]).toBeLessThanOrEqual(90);
+        expect(corner[1]).toBeGreaterThanOrEqual(-180);
+        expect(corner[1]).toBeLessThanOrEqual(180);
+      }
     }
   });
 

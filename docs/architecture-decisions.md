@@ -109,16 +109,17 @@ Defaults (configurable):
 
 - WebSocket from day one. Raw `ws`, not Socket.io.
 - Endpoint: `/ws/positions`.
-- Client → server messages: `subscribe`, `update_subscription` (both carry a
-  bbox). Bbox is mutable per connection.
+- Client → server messages: `subscribe` only. The backend owns coverage and
+  streams the supported global feed to subscribed clients.
 - Server → client messages: `position`, `static`, `vessel.enriched`, `error`.
-- REST `/api/vessels?bbox=...` provides the snapshot on map mount and after
-  each significant viewport change.
-- Frontend debounces bbox updates on `moveend` / `zoomend`.
+- REST `GET /api/vessels` provides the startup snapshot for the full supported
+  coverage set.
+- Frontend keeps the snapshot in a store; pan/zoom changes camera only and does
+  not trigger REST refetches for the main marker layer.
 - Per-connection bounded send queue. On overflow: drop oldest position events
   per vessel (newer position supersedes older); never drop static events.
 - 30-second heartbeat ping.
-- Realtime gateway holds in-memory `connectionId → bbox` map.
+- Realtime gateway holds the subscribed connection set.
 
 Future scaling (not in MVP): insert a Redis pub/sub channel between the
 consumer-group worker and WS fanout pods to scale fanout independently.
@@ -233,8 +234,9 @@ exposed as metric. Approximate trim at `MAXLEN ~ 100k` (configurable).
 
 Public REST:
 
-- `GET /api/vessels?bbox=minLon,minLat,maxLon,maxLat&limit=N` — snapshot
-  from `vessel_positions_latest`, joined to profile and sanctions status.
+- `GET /api/vessels?limit=N&staleMinutes=M` — latest snapshot from
+  `vessel_positions_latest`, joined to profile and sanctions status and filtered
+  to supported coverage.
 - `GET /api/vessels/:id` — full profile, current position, sanctions detail.
 - `GET /api/vessels/:id/track?from=ISO&to=ISO&simplify=N` — historical
   positions. Max window 7 days. Either downsampled points or a server-side
@@ -296,7 +298,7 @@ Headline metrics:
   `sanctions_import_records_total{source}`,
   `sanctions_matches_total{match_type}`.
 - Realtime: `ws_connections_active`, `ws_messages_sent_total`,
-  `ws_messages_dropped_total{reason}`, `ws_subscriber_bbox_updates_total`.
+  `ws_messages_dropped_total{reason}`, `ws_subscriptions_accepted_total`.
 - HTTP: `http_request_duration_seconds{route,method,status}` (histogram).
 
 ## Module structure

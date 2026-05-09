@@ -4,7 +4,7 @@ import { MapViewIds } from './mapViewIds';
 
 export function useVesselClick(
   map: MlMap | null,
-  onSelect: (mmsi: string) => void,
+  onSelect: (selection: { mmsi: string; vesselId: string | null }) => void,
 ): void {
   useEffect(() => {
     if (!map) return;
@@ -13,8 +13,9 @@ export function useVesselClick(
 
     const clickHandler = (e: MapLayerMouseEvent) => {
       const mmsi = e.features?.[0]?.properties?.mmsi;
+      const vesselId = e.features?.[0]?.properties?.vesselId;
       if (typeof mmsi === 'string' && mmsi.length > 0) {
-        onSelect(mmsi);
+        onSelect({ mmsi, vesselId: typeof vesselId === 'string' ? vesselId : null });
       }
     };
 

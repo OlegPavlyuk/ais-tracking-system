@@ -17,7 +17,7 @@ import {
   WS_CONNECTIONS_ACTIVE,
   WS_MESSAGES_DROPPED_TOTAL,
   WS_MESSAGES_SENT_TOTAL,
-  WS_SUBSCRIBER_BBOX_UPDATES_TOTAL,
+  WS_SUBSCRIPTIONS_ACCEPTED_TOTAL,
 } from './ws-metrics';
 import {
   AIS_DEADLETTER_TOTAL,
@@ -61,8 +61,8 @@ const wsMessagesDroppedProvider = makeCounterProvider({
 });
 
 const wsBboxUpdatesProvider = makeCounterProvider({
-  name: WS_SUBSCRIBER_BBOX_UPDATES_TOTAL,
-  help: 'Total subscribe/update_subscription messages accepted from clients.',
+  name: WS_SUBSCRIPTIONS_ACCEPTED_TOTAL,
+  help: 'Total subscribe messages accepted from clients.',
 });
 
 const providerConnectedProvider = makeGaugeProvider({

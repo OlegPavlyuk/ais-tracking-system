@@ -31,15 +31,13 @@ export class FanoutConsumer implements OnModuleInit {
         return;
       }
       const event = parsed.data;
-      if (event.kind === 'position') {
-        for (const id of this.subs.matchPosition(event.lat, event.lon)) {
+      this.subs.forEachSubscribed((id) => {
+        if (event.kind === 'position') {
           this.gateway.enqueue(id, { type: 'position', data: event });
-        }
-      } else {
-        for (const id of this.subs.allSubscribed()) {
+        } else {
           this.gateway.enqueue(id, { type: 'static', data: event });
         }
-      }
+      });
       this.pino.debug(
         {
           traceId: event.traceId,
@@ -67,9 +65,9 @@ export class FanoutConsumer implements OnModuleInit {
           );
           return;
         }
-        for (const id of this.subs.allSubscribed()) {
+        this.subs.forEachSubscribed((id) => {
           this.gateway.enqueue(id, { type: 'vessel.enriched', data: parsed.data });
-        }
+        });
       },
     );
     this.logger.log(

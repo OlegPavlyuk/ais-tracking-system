@@ -277,37 +277,44 @@ export class VesselsRepository {
     this.writes.inc({ table: 'vessels' });
   }
 
-  /** Snapshot of vessels in a bbox, joined to profile, filtered by `last_seen_at`. */
-  async findInBbox(bbox: Bbox, sinceMs: number, limit: number): Promise<VesselSnapshotRow[]> {
-    return this.timed('vessels.findInBbox', () => this.findInBboxInner(bbox, sinceMs, limit));
-  }
-
-  private async findInBboxInner(bbox: Bbox, sinceMs: number, limit: number): Promise<VesselSnapshotRow[]> {
+  /** Latest snapshot in supported coverage, joined to profile, filtered by `last_seen_at`. */
+  async findLatestInBboxes(
+    bboxes: readonly Bbox[],
+    sinceMs: number,
+    limit: number,
+  ): Promise<VesselSnapshotRow[]> {
+    if (bboxes.length === 0) return [];
     const since = new Date(Date.now() - sinceMs).toISOString();
-    const rows = await this.dbs.db.execute(sql`
-      SELECT
-        v.id,
-        v.mmsi,
-        v.imo,
-        v.name,
-        v.call_sign       AS "callSign",
-        v.ship_type       AS "shipType",
-        ST_X(p.position::geometry) AS lon,
-        ST_Y(p.position::geometry) AS lat,
-        p.sog,
-        p.cog,
-        p.true_heading    AS "trueHeading",
-        p.nav_status      AS "navStatus",
-        p.occurred_at     AS "occurredAt",
-        p.last_seen_at    AS "lastSeenAt"
-      FROM vessel_positions_latest p
-      JOIN vessels v ON v.id = p.vessel_id
-      WHERE p.position && ST_MakeEnvelope(${bbox.minLon}, ${bbox.minLat}, ${bbox.maxLon}, ${bbox.maxLat}, 4326)
-        AND p.last_seen_at >= ${since}
-      ORDER BY p.last_seen_at DESC
-      LIMIT ${limit}
+    const bboxConditions = bboxes.map((bbox) => sql`
+      p.position && ST_MakeEnvelope(${bbox.minLon}, ${bbox.minLat}, ${bbox.maxLon}, ${bbox.maxLat}, 4326)
     `);
-    return rows as unknown as VesselSnapshotRow[];
+
+    return this.timed('vessels.findLatestInBboxes', async () => {
+      const rows = await this.dbs.db.execute(sql`
+        SELECT
+          v.id,
+          v.mmsi,
+          v.imo,
+          v.name,
+          v.call_sign       AS "callSign",
+          v.ship_type       AS "shipType",
+          ST_X(p.position::geometry) AS lon,
+          ST_Y(p.position::geometry) AS lat,
+          p.sog,
+          p.cog,
+          p.true_heading    AS "trueHeading",
+          p.nav_status      AS "navStatus",
+          p.occurred_at     AS "occurredAt",
+          p.last_seen_at    AS "lastSeenAt"
+        FROM vessel_positions_latest p
+        JOIN vessels v ON v.id = p.vessel_id
+        WHERE p.last_seen_at >= ${since}
+          AND (${sql.join(bboxConditions, sql` OR `)})
+        ORDER BY p.last_seen_at DESC
+        LIMIT ${limit}
+      `);
+      return rows as unknown as VesselSnapshotRow[];
+    });
   }
 
   /** Full vessel profile + current position, or null when the id is unknown. */

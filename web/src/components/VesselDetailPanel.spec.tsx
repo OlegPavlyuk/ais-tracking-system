@@ -24,6 +24,7 @@ function renderPanel(mmsi: string, qc = makeQueryClient()) {
 const BASE_VESSEL: Vessel = {
   mmsi: '123456789',
   vesselId: null,
+  lastSeenAt: '2024-01-01T00:00:00.000Z',
   lat: 43.0,
   lon: 30.0,
   sog: 12.5,
@@ -69,7 +70,7 @@ const DETAIL_RESPONSE: VesselDetailRow = {
 };
 
 beforeEach(() => {
-  useVesselsStore.setState({ vessels: new Map(), bbox: null, wsStatus: 'idle', error: null });
+  useVesselsStore.setState({ vessels: new Map(), wsStatus: 'idle', error: null });
   vi.stubGlobal('fetch', vi.fn());
 });
 
@@ -190,10 +191,12 @@ describe('VesselDetailPanel', () => {
     expect(attributionNodes).toHaveLength(1);
   });
 
-  it('shows outside viewport indicator when vessel is absent from Zustand (state 3)', () => {
+  it('shows local-store fallback notice when vessel is absent from Zustand', () => {
     // No vessel seeded — store is empty
     renderPanel('123456789');
-    expect(screen.getByText('Vessel is outside the current viewport.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Live vessel data is not currently available in the local store.'),
+    ).toBeInTheDocument();
   });
 
   it('shows — for live position fields in state 3', () => {
@@ -202,6 +205,23 @@ describe('VesselDetailPanel', () => {
     const dashes = screen.getAllByText('—');
     // SOG, COG, Heading, Nav status should all be —
     expect(dashes.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('falls back to backend detail position when live store data is absent', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(DETAIL_RESPONSE), { status: 200 }),
+    );
+
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <VesselDetailPanel mmsi="123456789" vesselId="vessel-id-1" onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('12.5 kn')).toBeInTheDocument();
+    });
+    expect(screen.getByText('90°')).toBeInTheDocument();
   });
 
   it('prefers Zustand sanctionsMatches over query matches when Zustand has non-null matches', async () => {

@@ -1,4 +1,4 @@
-import { ServerMessageSchema, type ClientMessage, type ServerMessageParsed, type Bbox } from './protocol';
+import { ServerMessageSchema, type ClientMessage, type ServerMessageParsed } from './protocol';
 import { nextBackoffMs } from './backoff';
 
 export type WsClientStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
@@ -22,7 +22,6 @@ export class WsClient {
   private ws: WebSocket | null = null;
   private attempt = 0;
   private receivedSinceOpen = false;
-  private currentBbox: Bbox | null = null;
   private disconnectedAt: number | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closedByUser = false;
@@ -32,15 +31,9 @@ export class WsClient {
     private readonly handlers: WsClientHandlers,
   ) {}
 
-  start(bbox: Bbox): void {
-    this.currentBbox = bbox;
+  start(): void {
     this.closedByUser = false;
     this.connect();
-  }
-
-  updateSubscription(bbox: Bbox): void {
-    this.currentBbox = bbox;
-    this.send({ type: 'update_subscription', bbox });
   }
 
   stop(): void {
@@ -68,7 +61,7 @@ export class WsClient {
     this.handlers.onStatus(this.attempt === 0 ? 'connecting' : 'reconnecting');
 
     ws.onopen = () => {
-      if (this.currentBbox) this.send({ type: 'subscribe', bbox: this.currentBbox });
+      this.send({ type: 'subscribe' });
       const outageMs = this.opts.outageResyncMs ?? DEFAULT_OUTAGE_RESYNC_MS;
       if (this.disconnectedAt !== null && Date.now() - this.disconnectedAt > outageMs) {
         this.handlers.onResync();
