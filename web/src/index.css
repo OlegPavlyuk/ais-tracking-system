@@ -9,6 +9,26 @@ body,
   margin: 0;
 }
 
+.zoom-level-control .zoom-level-control-button {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.zoom-level-control .zoom-level-control-value {
+  min-width: 29px;
+  height: 24px;
+  border-top: 1px solid rgb(0 0 0 / 10%);
+  border-bottom: 1px solid rgb(0 0 0 / 10%);
+  color: #334155;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 24px;
+  text-align: center;
+  user-select: none;
+}
+
 .vessel-detail-popup .maplibregl-popup-content {
   padding: 0;
   background: transparent;

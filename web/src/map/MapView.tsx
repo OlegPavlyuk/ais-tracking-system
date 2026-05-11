@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, { type Map as MlMap } from 'maplibre-gl';
+import maplibregl, { type IControl, type Map as MlMap } from 'maplibre-gl';
 import { MapViewIds } from './mapViewIds';
 
 const DEFAULT_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
@@ -38,6 +38,7 @@ export function MapView({ onReady }: MapViewProps) {
       zoom: DEFAULT_ZOOM,
       attributionControl: { compact: true },
     });
+    map.addControl(new ZoomLevelControl(), 'bottom-right');
 
     let cancelled = false;
     map.on('load', () => {
@@ -58,6 +59,66 @@ export function MapView({ onReady }: MapViewProps) {
   }, []);
 
   return <div ref={containerRef} className="absolute inset-0" />;
+}
+
+class ZoomLevelControl implements IControl {
+  private map: MlMap | null = null;
+  private container: HTMLDivElement | null = null;
+  private zoomValue: HTMLDivElement | null = null;
+
+  onAdd(map: MlMap): HTMLElement {
+    this.map = map;
+    const container = document.createElement('div');
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group zoom-level-control';
+
+    const zoomInButton = document.createElement('button');
+    zoomInButton.type = 'button';
+    zoomInButton.className = 'zoom-level-control-button';
+    zoomInButton.setAttribute('aria-label', 'Zoom in');
+    zoomInButton.textContent = '+';
+    zoomInButton.addEventListener('click', this.handleZoomIn);
+
+    const zoomValue = document.createElement('div');
+    zoomValue.className = 'zoom-level-control-value';
+
+    const zoomOutButton = document.createElement('button');
+    zoomOutButton.type = 'button';
+    zoomOutButton.className = 'zoom-level-control-button';
+    zoomOutButton.setAttribute('aria-label', 'Zoom out');
+    zoomOutButton.textContent = '-';
+    zoomOutButton.addEventListener('click', this.handleZoomOut);
+
+    container.append(zoomInButton, zoomValue, zoomOutButton);
+    map.on('zoom', this.updateZoomValue);
+    this.container = container;
+    this.zoomValue = zoomValue;
+    this.updateZoomValue();
+
+    return container;
+  }
+
+  onRemove(): void {
+    this.map?.off('zoom', this.updateZoomValue);
+    this.container?.remove();
+    this.map = null;
+    this.container = null;
+    this.zoomValue = null;
+  }
+
+  private readonly handleZoomIn = () => {
+    if (!this.map) return;
+    this.map.easeTo({ zoom: Math.round(this.map.getZoom()) + 1 });
+  };
+
+  private readonly handleZoomOut = () => {
+    if (!this.map) return;
+    this.map.easeTo({ zoom: Math.round(this.map.getZoom()) - 1 });
+  };
+
+  private readonly updateZoomValue = () => {
+    if (!this.map || !this.zoomValue) return;
+    this.zoomValue.textContent = this.map.getZoom().toFixed(1);
+  };
 }
 
 function registerVesselIcon(map: MlMap): Promise<void> {
