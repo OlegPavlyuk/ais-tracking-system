@@ -139,13 +139,13 @@ describe('VesselDetailContent', () => {
   it('renders Candidate match pill for candidate sanctionsStatus', () => {
     seedVessel({ vesselId: null, sanctionsStatus: 'candidate' });
     renderContent('123456789');
-    expect(screen.getByText('Candidate match')).toBeInTheDocument();
+    expect(screen.getByText('Candidate')).toBeInTheDocument();
   });
 
   it('renders Sanctioned match pill for sanctioned sanctionsStatus', () => {
     seedVessel({ vesselId: null, sanctionsStatus: 'sanctioned' });
     renderContent('123456789');
-    expect(screen.getByText('Sanctioned match')).toBeInTheDocument();
+    expect(screen.getByText('Sanctioned')).toBeInTheDocument();
   });
 
   it('calls onClose from the close button', () => {
@@ -186,9 +186,76 @@ describe('VesselDetailContent', () => {
     renderContent('123456789');
 
     await waitFor(() => {
-      expect(screen.getByText(/ACME CORP/)).toBeInTheDocument();
+      expect(screen.getByText('OFAC')).toBeInTheDocument();
     });
-    expect(screen.getByText(/OFAC/)).toBeInTheDocument();
+    expect(screen.getByText('Sanctions')).toBeInTheDocument();
+    expect(screen.getByText('Match by IMO')).toBeInTheDocument();
+  });
+
+  it('shows sanctions match provider and method without score percentages', () => {
+    seedVessel({
+      vesselId: null,
+      sanctionsStatus: 'candidate',
+      sanctionsMatches: [
+        {
+          id: 'm1',
+          source: 'ofac',
+          entityName: 'BIANCA',
+          matchMethod: 'name_candidate',
+          score: null,
+        },
+      ],
+    });
+
+    renderContent('123456789');
+
+    expect(screen.getByText('Sanctions')).toBeInTheDocument();
+    expect(screen.getByText('Candidate')).toBeInTheDocument();
+    expect(screen.getByText('OFAC')).toBeInTheDocument();
+    expect(screen.getByText('Match by name')).toBeInTheDocument();
+    expect(screen.queryByText('BIANCA')).not.toBeInTheDocument();
+    expect(screen.queryByText(/NaN%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('expands sanctions matches beyond the first two', () => {
+    seedVessel({
+      vesselId: null,
+      sanctionsMatches: [
+        {
+          id: 'm1',
+          source: 'ofac',
+          entityName: 'FIRST ENTITY',
+          matchMethod: 'imo',
+          score: 0.9,
+        },
+        {
+          id: 'm2',
+          source: 'opensanctions',
+          entityName: 'SECOND ENTITY',
+          matchMethod: 'name',
+          score: 0.7,
+        },
+        {
+          id: 'm3',
+          source: 'ofac',
+          entityName: 'THIRD ENTITY',
+          matchMethod: 'callSign',
+          score: null,
+        },
+      ],
+    });
+
+    renderContent('123456789');
+
+    expect(screen.getByText('Match by IMO')).toBeInTheDocument();
+    expect(screen.getByText('Match by name')).toBeInTheDocument();
+    expect(screen.queryByText('Match by callSign')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '+1 more' }));
+
+    expect(screen.getByText('Match by callSign')).toBeInTheDocument();
+    expect(screen.getByText('Show less')).toBeInTheDocument();
   });
 
   it('shows a single OpenSanctions attribution when relevant', async () => {
@@ -221,8 +288,9 @@ describe('VesselDetailContent', () => {
     renderContent('123456789');
 
     await waitFor(() => {
-      expect(screen.getByText(/OS ENTITY/)).toBeInTheDocument();
+      expect(screen.getByText('OpenSanctions')).toBeInTheDocument();
     });
+    expect(screen.getByText('Match by name')).toBeInTheDocument();
     expect(screen.getByText(/OpenSanctions \(CC BY-NC 4\.0\)/)).toBeInTheDocument();
     expect(screen.getAllByText(/OpenSanctions \(CC BY-NC 4\.0\)/)).toHaveLength(1);
   });
@@ -280,9 +348,11 @@ describe('VesselDetailContent', () => {
     renderContent('123456789');
 
     await waitFor(() => {
-      expect(screen.getByText(/LIVE ENTITY/)).toBeInTheDocument();
+      expect(screen.getByText('OFAC')).toBeInTheDocument();
     });
-    expect(screen.queryByText(/QUERY ENTITY/)).not.toBeInTheDocument();
+    expect(screen.getByText('Match by IMO')).toBeInTheDocument();
+    expect(screen.queryByText('OpenSanctions')).not.toBeInTheDocument();
+    expect(screen.queryByText('Match by MMSI')).not.toBeInTheDocument();
   });
 
   it('updates sanctions pill live from Zustand after render', async () => {
@@ -318,7 +388,7 @@ describe('VesselDetailContent', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText('Sanctioned match')).toBeInTheDocument();
-    expect(screen.getByText('LIVE SANCTION')).toBeInTheDocument();
+    expect(screen.getByText('Sanctioned')).toBeInTheDocument();
+    expect(screen.getByText('Match by IMO')).toBeInTheDocument();
   });
 });
