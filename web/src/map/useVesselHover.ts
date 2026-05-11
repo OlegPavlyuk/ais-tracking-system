@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import maplibregl, { type Map as MlMap, type MapMouseEvent } from 'maplibre-gl';
+import type { Map as MlMap, MapMouseEvent, PointLike } from 'maplibre-gl';
 import { MapViewIds } from './mapViewIds';
 import { relativeTime } from '@/lib/relativeTime';
 
 const QUERY_RADIUS = 4; // px around cursor
+const TOOLTIP_OFFSET = 12;
+const TOOLTIP_MARGIN = 8;
 
 function buildPopupContent(props: Record<string, unknown>): HTMLElement {
   const title = String(props.vesselName ?? props.mmsi ?? '');
@@ -11,24 +13,67 @@ function buildPopupContent(props: Record<string, unknown>): HTMLElement {
   const lastSeen = relativeTime(typeof props.occurredAt === 'string' ? props.occurredAt : null);
 
   const root = document.createElement('div');
-  root.style.cssText = 'font-size:12px;line-height:1.6;min-width:130px';
+  root.className = 'vessel-hover-card';
 
   const h = document.createElement('div');
-  h.style.cssText = 'font-weight:600;margin-bottom:1px';
+  h.className = 'vessel-hover-card-title';
   h.textContent = title;
   root.appendChild(h);
 
   const s = document.createElement('div');
-  s.style.cssText = 'color:#64748b';
+  s.className = 'vessel-hover-card-row';
   s.textContent = status;
   root.appendChild(s);
 
   const t = document.createElement('div');
-  t.style.cssText = 'color:#64748b';
+  t.className = 'vessel-hover-card-row';
   t.textContent = `Updated ${lastSeen}`;
   root.appendChild(t);
 
   return root;
+}
+
+function createTooltipOverlay(map: MlMap): HTMLElement {
+  const overlay = document.createElement('div');
+  overlay.className = 'vessel-hover-overlay';
+  overlay.hidden = true;
+  map.getContainer().appendChild(overlay);
+  return overlay;
+}
+
+function hideTooltip(overlay: HTMLElement): void {
+  overlay.hidden = true;
+  overlay.replaceChildren();
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function placeTooltipOverlay(map: MlMap, overlay: HTMLElement, coords: [number, number]): void {
+  const container = map.getContainer();
+  const point = map.project(coords);
+
+  const width = overlay.offsetWidth;
+  const height = overlay.offsetHeight;
+  const maxLeft = Math.max(TOOLTIP_MARGIN, container.clientWidth - width - TOOLTIP_MARGIN);
+  const maxTop = Math.max(TOOLTIP_MARGIN, container.clientHeight - height - TOOLTIP_MARGIN);
+
+  const preferredLeft = point.x - width / 2;
+  const preferredTop = point.y - height - TOOLTIP_OFFSET;
+  const fallbackTop = point.y + TOOLTIP_OFFSET;
+
+  const left = preferredLeft;
+  const top = preferredTop >= TOOLTIP_MARGIN ? preferredTop : fallbackTop;
+
+  overlay.style.left = `${Math.round(clamp(left, TOOLTIP_MARGIN, maxLeft))}px`;
+  overlay.style.top = `${Math.round(clamp(top, TOOLTIP_MARGIN, maxTop))}px`;
+}
+
+function showTooltip(map: MlMap, overlay: HTMLElement, props: Record<string, unknown>, coords: [number, number]): void {
+  overlay.replaceChildren(buildPopupContent(props));
+  overlay.hidden = false;
+  placeTooltipOverlay(map, overlay, coords);
 }
 
 // Signature that changes whenever popup content needs to refresh:
@@ -47,20 +92,7 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
   useEffect(() => {
     if (!map || disabled) return;
 
-    const popup = new maplibregl.Popup({
-      closeButton: false,
-      closeOnClick: false,
-      offset: 12,
-      maxWidth: '220px',
-    });
-
-    // Disable pointer events once on open so the popup never blocks mousemove
-    // events from reaching the map canvas beneath it.
-    popup.on('open', () => {
-      const el = popup.getElement();
-      if (el) el.style.pointerEvents = 'none';
-    });
-
+    const overlay = createTooltipOverlay(map);
     const layerIds = [MapViewIds.vesselsLayerId, MapViewIds.vesselCircleLayerId];
 
     let pendingPoint: { x: number; y: number } | null = null;
@@ -73,7 +105,7 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
       pendingPoint = null;
       if (!pt) return;
 
-      const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
+      const bbox: [PointLike, PointLike] = [
         [pt.x - QUERY_RADIUS, pt.y - QUERY_RADIUS],
         [pt.x + QUERY_RADIUS, pt.y + QUERY_RADIUS],
       ];
@@ -81,7 +113,7 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
 
       if (!features.length) {
         if (currentSig !== null) {
-          popup.remove();
+          hideTooltip(overlay);
           currentSig = null;
         }
         return;
@@ -109,10 +141,7 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
       if (sig === currentSig) return;
 
       currentSig = sig;
-      popup
-        .setLngLat(coords as [number, number])
-        .setDOMContent(buildPopupContent(props))
-        .addTo(map);
+      showTooltip(map, overlay, props, coords as [number, number]);
     };
 
     const moveHandler = (e: MapMouseEvent) => {
@@ -128,7 +157,7 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
         rafId = null;
       }
       pendingPoint = null;
-      popup.remove();
+      hideTooltip(overlay);
       currentSig = null;
     };
 
@@ -139,7 +168,7 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
       if (rafId !== null) cancelAnimationFrame(rafId);
       map.off('mousemove', moveHandler);
       map.off('mouseout', outHandler);
-      popup.remove();
+      overlay.remove();
     };
   }, [disabled, map]);
 }

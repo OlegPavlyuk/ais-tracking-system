@@ -60,6 +60,7 @@ vi.mock('maplibre-gl', () => ({
 
 interface MockMap {
   handlers: Record<string, Array<(event?: { point: { x: number; y: number } }) => void>>;
+  getContainer: () => HTMLDivElement;
   on: (event: string, handler: (event?: { point: { x: number; y: number } }) => void) => void;
   off: (event: string, handler: (event?: { point: { x: number; y: number } }) => void) => void;
   queryRenderedFeatures: ReturnType<typeof vi.fn>;
@@ -68,8 +69,14 @@ interface MockMap {
 
 function createMockMap(): MockMap {
   const handlers: MockMap['handlers'] = {};
+  const container = document.createElement('div');
+  Object.defineProperty(container, 'clientWidth', { configurable: true, value: 800 });
+  Object.defineProperty(container, 'clientHeight', { configurable: true, value: 600 });
+  document.body.appendChild(container);
+
   return {
     handlers,
+    getContainer: () => container,
     on: (event, handler) => {
       handlers[event] ??= [];
       handlers[event].push(handler);
@@ -89,14 +96,29 @@ function HookHarness({ map, disabled }: { map: MockMap; disabled: boolean }) {
 
 beforeEach(() => {
   popupState.instances.length = 0;
+  let rafId = 0;
+  const rafCallbacks = new Map<number, FrameRequestCallback>();
+
   vi.stubGlobal(
     'requestAnimationFrame',
     ((cb: FrameRequestCallback) => {
-      cb(0);
-      return 1;
+      const id = ++rafId;
+      rafCallbacks.set(id, cb);
+      window.setTimeout(() => {
+        const callback = rafCallbacks.get(id);
+        if (!callback) return;
+        rafCallbacks.delete(id);
+        callback(0);
+      }, 0);
+      return id;
     }) as typeof requestAnimationFrame,
   );
-  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((id: number) => {
+      rafCallbacks.delete(id);
+    }),
+  );
 });
 
 afterEach(() => {
@@ -141,5 +163,46 @@ describe('useVesselHover', () => {
     map.handlers.mousemove?.[0]?.({ point: { x: 30, y: 43 } });
 
     expect(await screen.findByText('HOVER VESSEL')).toBeInTheDocument();
+  });
+
+  it('reuses one overlay node, skips rebuilds for the same vessel, and cleans up listeners', async () => {
+    const map = createMockMap();
+    const feature = {
+      geometry: { coordinates: [30, 43] },
+      properties: {
+        mmsi: '123456789',
+        vesselName: 'HOVER VESSEL',
+        navStatusLabel: 'Under way',
+        occurredAt: '2024-01-01T00:00:00.000Z',
+      },
+    };
+    map.queryRenderedFeatures.mockReturnValue([feature]);
+
+    const { unmount } = render(<HookHarness map={map} disabled={false} />);
+
+    expect(map.getContainer().querySelectorAll('.vessel-hover-overlay')).toHaveLength(1);
+    expect(map.handlers.mousemove).toHaveLength(1);
+    expect(map.handlers.mouseout).toHaveLength(1);
+
+    map.handlers.mousemove?.[0]?.({ point: { x: 30, y: 43 } });
+    expect(await screen.findByText('HOVER VESSEL')).toBeInTheDocument();
+
+    const overlay = map.getContainer().querySelector('.vessel-hover-overlay');
+    const content = overlay?.firstElementChild;
+    const firstQueryCount = map.queryRenderedFeatures.mock.calls.length;
+
+    map.handlers.mousemove?.[0]?.({ point: { x: 30, y: 43 } });
+
+    await waitFor(() => {
+      expect(map.queryRenderedFeatures.mock.calls.length).toBe(firstQueryCount + 1);
+    });
+    expect(map.getContainer().querySelector('.vessel-hover-overlay')).toBe(overlay);
+    expect(overlay?.firstElementChild).toBe(content);
+
+    unmount();
+
+    expect(map.getContainer().querySelector('.vessel-hover-overlay')).toBeNull();
+    expect(map.handlers.mousemove).toHaveLength(0);
+    expect(map.handlers.mouseout).toHaveLength(0);
   });
 });
