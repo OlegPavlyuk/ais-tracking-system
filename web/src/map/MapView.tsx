@@ -11,9 +11,6 @@ const VESSELS_SOURCE_ID = MapViewIds.vesselsSourceId;
 const VESSELS_LAYER_ID = MapViewIds.vesselsLayerId;
 const VESSELS_CIRCLE_LAYER_ID = MapViewIds.vesselCircleLayerId;
 
-// Rendered at 48×48 internal resolution with pixelRatio:2 so MapLibre displays it
-// at 24 CSS px — same visible size as before but 2× the sampling precision for
-// crisper SDF edges. Path is the original 24×24 arrow scaled 2× to match viewBox.
 const VESSEL_ICON_SIZE = 48;
 const VESSEL_ICON_PIXEL_RATIO = 2;
 const VESSEL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${VESSEL_ICON_SIZE}" height="${VESSEL_ICON_SIZE}" viewBox="0 0 48 48">
@@ -43,8 +40,6 @@ export function MapView({ onReady }: MapViewProps) {
 
     let cancelled = false;
     map.on('load', () => {
-      // Icon must be registered before the symbol layer references it,
-      // otherwise MapLibre logs "Image not found" on first paint.
       void registerVesselIcon(map).then(() => {
         if (cancelled) return;
         addVesselsSource(map);

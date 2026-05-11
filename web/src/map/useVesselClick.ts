@@ -4,7 +4,11 @@ import { MapViewIds } from './mapViewIds';
 
 export function useVesselClick(
   map: MlMap | null,
-  onSelect: (selection: { mmsi: string; vesselId: string | null }) => void,
+  onSelect: (selection: {
+    mmsi: string;
+    vesselId: string | null;
+    anchorLngLat: [number, number];
+  }) => void,
 ): void {
   useEffect(() => {
     if (!map) return;
@@ -14,8 +18,18 @@ export function useVesselClick(
     const clickHandler = (e: MapLayerMouseEvent) => {
       const mmsi = e.features?.[0]?.properties?.mmsi;
       const vesselId = e.features?.[0]?.properties?.vesselId;
+      const coordinates = (
+        e.features?.[0]?.geometry as { coordinates?: [number, number] } | undefined
+      )?.coordinates;
       if (typeof mmsi === 'string' && mmsi.length > 0) {
-        onSelect({ mmsi, vesselId: typeof vesselId === 'string' ? vesselId : null });
+        onSelect({
+          mmsi,
+          vesselId: typeof vesselId === 'string' ? vesselId : null,
+          anchorLngLat:
+            Array.isArray(coordinates) && coordinates.length === 2
+              ? coordinates
+              : [e.lngLat.lng, e.lngLat.lat],
+        });
       }
     };
 

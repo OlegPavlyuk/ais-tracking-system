@@ -43,9 +43,9 @@ function featureSig(props: Record<string, unknown>, coords: [number, number]): s
   ].join('|');
 }
 
-export function useVesselHover(map: MlMap | null): void {
+export function useVesselHover(map: MlMap | null, disabled = false): void {
   useEffect(() => {
-    if (!map) return;
+    if (!map || disabled) return;
 
     const popup = new maplibregl.Popup({
       closeButton: false,
@@ -141,5 +141,5 @@ export function useVesselHover(map: MlMap | null): void {
       map.off('mouseout', outHandler);
       popup.remove();
     };
-  }, [map]);
+  }, [disabled, map]);
 }

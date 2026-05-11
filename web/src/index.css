@@ -8,3 +8,34 @@ body,
   height: 100%;
   margin: 0;
 }
+
+.vessel-detail-popup .maplibregl-popup-content {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.vessel-detail-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.vessel-detail-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.vessel-detail-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: rgb(255 255 255);
+}
+
+.vessel-detail-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.vessel-detail-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.vessel-detail-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: rgb(255 255 255);
+}
+
+.vessel-detail-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: rgb(255 255 255);
+}
+
+.vessel-detail-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: rgb(255 255 255);
+}
+
+.vessel-detail-popup .maplibregl-popup-close-button {
+  display: none;
+}

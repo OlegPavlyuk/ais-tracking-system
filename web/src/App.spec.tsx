@@ -21,7 +21,7 @@ vi.mock('./map/useVesselsLayer', () => ({ useVesselsLayer: vi.fn() }));
 vi.mock('./map/useVesselClick', () => ({ useVesselClick: vi.fn() }));
 vi.mock('./map/useVesselHover', () => ({ useVesselHover: vi.fn() }));
 vi.mock('./components/StatusPill', () => ({ StatusPill: () => null }));
-vi.mock('./components/VesselDetailPanel', () => ({ VesselDetailPanel: () => null }));
+vi.mock('./components/VesselDetailPopup', () => ({ VesselDetailPopup: () => null }));
 vi.mock('./components/MapLegend', () => ({ MapLegend: () => null }));
 vi.mock('./api/client', async () => {
   const actual = await vi.importActual<typeof import('./api/client')>('./api/client');

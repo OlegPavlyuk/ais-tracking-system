@@ -8,6 +8,7 @@ module.exports = tseslint.config(
   {
     ignores: [
       'dist/**',
+      '**/dist/**',
       'node_modules/**',
       'coverage/**',
       'aisstream/**',

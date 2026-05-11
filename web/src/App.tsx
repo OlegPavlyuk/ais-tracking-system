@@ -6,7 +6,7 @@ import { useVesselClick } from './map/useVesselClick';
 import { useVesselHover } from './map/useVesselHover';
 import { ErrorNotice } from './components/ErrorNotice';
 import { StatusPill } from './components/StatusPill';
-import { VesselDetailPanel } from './components/VesselDetailPanel';
+import { VesselDetailPopup } from './components/VesselDetailPopup';
 import { MapLegend } from './components/MapLegend';
 import { useVesselsStore } from './store/vessels';
 import { ApiError, fetchVessels } from './api/client';
@@ -15,7 +15,11 @@ import { WsClient, buildWsUrl, type WsClientHandlers } from './lib/wsClient';
 const WS_PATH = '/ws/positions';
 const STALE_PRUNE_INTERVAL_MS = 60_000;
 
-type SelectedVessel = { mmsi: string; vesselId: string | null };
+type SelectedVessel = {
+  mmsi: string;
+  vesselId: string | null;
+  anchorLngLat: [number, number];
+};
 
 export function App() {
   const [map, setMap] = useState<MlMap | null>(null);
@@ -25,7 +29,7 @@ export function App() {
 
   useVesselsLayer(map);
   useVesselClick(map, setSelectedVessel);
-  useVesselHover(map);
+  useVesselHover(map, selectedVessel !== null);
 
   const runFetch = useCallback(() => {
     const id = ++requestIdRef.current;
@@ -101,10 +105,10 @@ export function App() {
       <StatusPill />
       <ErrorNotice />
       <MapLegend />
-      {selectedVessel && (
-        <VesselDetailPanel
-          mmsi={selectedVessel.mmsi}
-          vesselId={selectedVessel.vesselId}
+      {map && selectedVessel && (
+        <VesselDetailPopup
+          map={map}
+          selectedVessel={selectedVessel}
           onClose={() => setSelectedVessel(null)}
         />
       )}

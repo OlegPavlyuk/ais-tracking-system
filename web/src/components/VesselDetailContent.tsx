@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchVesselDetail } from '@/api/client';
-import { useVesselsStore } from '@/store/vessels';
-import { shipTypeLabel } from '@/lib/shipTypeLabel';
 import { navStatusLabel } from '@/lib/navStatusLabel';
+import { relativeTime } from '@/lib/relativeTime';
+import { shipTypeLabel } from '@/lib/shipTypeLabel';
+import { useVesselsStore } from '@/store/vessels';
 import type { VesselDetailRow, VesselSanctionMatch } from '@/store/types';
 
 interface Props {
@@ -17,6 +18,10 @@ function fmt(value: number | null, suffix: string): string {
 
 function fmtDeg(value: number | null): string {
   return value !== null ? `${value}°` : '—';
+}
+
+function formatUpdatedAt(value: string | null | undefined): string {
+  return relativeTime(value ?? null);
 }
 
 const SANCTIONS_LABELS: Record<string, string> = {
@@ -51,31 +56,26 @@ function SanctionsPill({ status }: { status: 'clear' | 'candidate' | 'sanctioned
 function MatchItem({ match }: { match: VesselSanctionMatch }) {
   const sourceLabel = match.source === 'ofac' ? 'OFAC' : 'OpenSanctions';
   return (
-    <li className="text-xs text-gray-700 space-y-0.5">
-      <div>
-        <span className="font-medium">{match.entityName}</span>
-        {' — '}
-        {sourceLabel}
-        {', '}
-        {match.matchMethod}
-      </div>
-      {match.source === 'opensanctions' && (
-        <div className="text-gray-400 italic">Data: OpenSanctions (CC BY-NC 4.0)</div>
-      )}
+    <li className="text-xs text-gray-700">
+      <span className="font-medium">{match.entityName}</span>
+      {' — '}
+      {sourceLabel}
+      {', '}
+      {match.matchMethod}
     </li>
   );
 }
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="flex justify-between gap-2 py-1 text-sm border-b border-gray-100 last:border-0">
+    <div className="flex justify-between gap-3 py-1.5 text-sm border-b border-gray-100 last:border-0">
       <span className="text-gray-500 shrink-0">{label}</span>
       <span className="text-gray-900 text-right">{value ?? '—'}</span>
     </div>
   );
 }
 
-export function VesselDetailPanel({ mmsi, vesselId: initialVesselId = null, onClose }: Props) {
+export function VesselDetailContent({ mmsi, vesselId: initialVesselId = null, onClose }: Props) {
   const vessel = useVesselsStore((s) => s.vessels.get(mmsi));
   const vesselId = vessel?.vesselId ?? initialVesselId;
 
@@ -88,9 +88,6 @@ export function VesselDetailPanel({ mmsi, vesselId: initialVesselId = null, onCl
     refetchOnWindowFocus: false,
   });
 
-  // Zustand data takes precedence for sanctions fields (kept live via WS).
-  // sanctionsMatches null = enrichment not yet received → fall back to query data.
-  // sanctionsMatches [] = enrichment arrived with no matches → authoritative, do not fall back.
   const sanctionsStatus = vessel?.sanctionsStatus ?? queryData?.sanctionsStatus ?? null;
   const sanctionsMatches: VesselDetailRow['sanctionsMatches'] =
     vessel?.sanctionsMatches !== null && vessel?.sanctionsMatches !== undefined
@@ -98,41 +95,45 @@ export function VesselDetailPanel({ mmsi, vesselId: initialVesselId = null, onCl
       : (queryData?.sanctionsMatches ?? []);
 
   const isInStore = vessel !== undefined;
-  const livePosition = vessel
+  const hasLivePosition =
+    vessel?.lat !== null &&
+    vessel?.lat !== undefined &&
+    vessel?.lon !== null &&
+    vessel?.lon !== undefined;
+
+  const livePosition = hasLivePosition
     ? {
         sog: vessel.sog,
         cog: vessel.cog,
         trueHeading: vessel.trueHeading,
         navStatus: vessel.navStatus,
       }
-    : queryData?.position ?? null;
+    : null;
 
   const name = vessel?.name ?? queryData?.name;
   const headerTitle = name ?? `MMSI ${mmsi}`;
-
-  const hasDimensions =
-    queryData !== undefined &&
-    (queryData.dimensionToBow !== null ||
-      queryData.dimensionToStern !== null ||
-      queryData.dimensionToPort !== null ||
-      queryData.dimensionToStarboard !== null);
+  const shipType = shipTypeLabel(vessel?.shipType ?? queryData?.shipType ?? null);
+  const destination = vessel?.destination ?? queryData?.destination ?? null;
+  const updatedAt = formatUpdatedAt(isInStore ? vessel?.lastSeenAt ?? vessel?.occurredAt : null);
+  const hasOpenSanctionsMatch = sanctionsMatches.some((match) => match.source === 'opensanctions');
 
   return (
-    <div className="fixed right-0 top-0 h-full w-[360px] bg-white shadow-xl z-[200] overflow-y-auto flex flex-col">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-gray-200 sticky top-0 bg-white">
-        <h2 className="text-base font-semibold text-gray-900 leading-tight break-words">
-          {headerTitle}
-        </h2>
+    <div className="w-[320px] overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-slate-200">
+      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-gray-900 break-words">{headerTitle}</h2>
+          <p className="mt-0.5 text-xs text-gray-500">{shipType}</p>
+        </div>
         <button
+          type="button"
           onClick={onClose}
-          aria-label="Close panel"
-          className="shrink-0 text-gray-400 hover:text-gray-700 transition-colors"
+          aria-label="Close vessel details"
+          className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -145,90 +146,74 @@ export function VesselDetailPanel({ mmsi, vesselId: initialVesselId = null, onCl
         </button>
       </div>
 
-      <div className="flex-1 px-4 py-3 space-y-4">
+      <div className="space-y-3 px-4 py-3">
         {!isInStore && (
-          <div className="rounded bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-            Live vessel data is not currently available in the local store.
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Vessel is outside the current viewport. Live data is unavailable.
           </div>
         )}
 
-        {/* mmsi-only fallback (state 2) */}
         {isInStore && vesselId === null && (
           <p className="text-sm text-gray-500">Full vessel profile is not available yet.</p>
         )}
 
-        {/* Identity section */}
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
             Identity
           </h3>
           <Field label="MMSI" value={mmsi} />
           <Field label="IMO" value={vessel?.imo ?? queryData?.imo ?? null} />
           <Field label="Call sign" value={vessel?.callSign ?? queryData?.callSign ?? null} />
-          <Field
-            label="Ship type"
-            value={shipTypeLabel(vessel?.shipType ?? queryData?.shipType ?? null)}
-          />
+          <Field label="Ship type" value={shipType} />
         </section>
 
-        {/* Sanctions section */}
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
             Sanctions
           </h3>
           <div className="mb-2">
             <SanctionsPill status={sanctionsStatus} />
           </div>
           {sanctionsMatches.length > 0 && (
-            <ul className="space-y-2 mt-1">
-              {sanctionsMatches.map((m) => (
-                <MatchItem key={m.id} match={m} />
+            <ul className="space-y-1.5">
+              {sanctionsMatches.map((match) => (
+                <MatchItem key={match.id} match={match} />
               ))}
             </ul>
           )}
+          {hasOpenSanctionsMatch && (
+            <div className="mt-2 text-xs italic text-gray-400">
+              Data: OpenSanctions (CC BY-NC 4.0)
+            </div>
+          )}
         </section>
 
-        {/* Live position section */}
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
             Live position
           </h3>
           <Field label="SOG" value={livePosition ? fmt(livePosition.sog, 'kn') : '—'} />
           <Field label="COG" value={livePosition ? fmtDeg(livePosition.cog) : '—'} />
-          <Field
-            label="Heading"
-            value={livePosition ? fmtDeg(livePosition.trueHeading) : '—'}
-          />
+          <Field label="Heading" value={livePosition ? fmtDeg(livePosition.trueHeading) : '—'} />
           <Field
             label="Nav status"
             value={livePosition ? navStatusLabel(livePosition.navStatus) : '—'}
           />
         </section>
 
-        {/* Destination */}
-        {(vessel?.destination ?? queryData?.destination) && (
+        {destination && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
               Destination
             </h3>
-            <p className="text-sm text-gray-900">{vessel?.destination ?? queryData?.destination}</p>
+            <p className="text-sm text-gray-900">{destination}</p>
           </section>
         )}
 
-        {/* Dimensions */}
-        {hasDimensions && (
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
-              Dimensions
-            </h3>
-            <Field label="Bow" value={queryData!.dimensionToBow !== null ? `${queryData!.dimensionToBow} m` : '—'} />
-            <Field label="Stern" value={queryData!.dimensionToStern !== null ? `${queryData!.dimensionToStern} m` : '—'} />
-            <Field label="Port" value={queryData!.dimensionToPort !== null ? `${queryData!.dimensionToPort} m` : '—'} />
-            <Field label="Starboard" value={queryData!.dimensionToStarboard !== null ? `${queryData!.dimensionToStarboard} m` : '—'} />
-          </section>
-        )}
+        <div className="border-t border-gray-100 pt-2 text-xs text-gray-400">
+          Updated {updatedAt}
+        </div>
 
-        {/* Loading state for detail query */}
         {vesselId !== null && isLoading && (
           <p className="text-xs text-gray-400">Loading vessel details...</p>
         )}
