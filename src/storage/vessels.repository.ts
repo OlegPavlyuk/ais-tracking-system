@@ -48,6 +48,7 @@ export interface VesselSanctionMatch {
   aliases: string[];
   flag: string | null;
   listingDate: string | null;
+  programs?: string[];
 }
 
 export interface VesselDetailRow {

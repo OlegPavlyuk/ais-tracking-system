@@ -12,6 +12,7 @@ export interface SanctionCandidate {
   aliases: string[];
   flag: string | null;
   listingDate: string | null;
+  programs: string[];
 }
 
 export interface MatchInput {
@@ -29,6 +30,7 @@ export interface SanctionMatch {
   aliases: string[];
   flag: string | null;
   listingDate: string | null;
+  programs: string[];
 }
 
 export interface MatchResult {
@@ -52,6 +54,7 @@ const toMatch = (row: SanctionCandidate, method: MatchMethod): SanctionMatch => 
   aliases: row.aliases,
   flag: row.flag,
   listingDate: row.listingDate,
+  programs: row.programs,
 });
 
 const compareStr = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

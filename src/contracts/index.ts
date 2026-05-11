@@ -68,6 +68,7 @@ export const SanctionMatchSchema = z.object({
   aliases: z.array(z.string()),
   flag: z.string().nullable(),
   listingDate: z.string().nullable(),
+  programs: z.array(z.string()).default([]),
 });
 
 export const VesselEnrichedEventSchema = z.object({

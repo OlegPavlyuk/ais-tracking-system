@@ -16,6 +16,7 @@ const baseRow = (over: Partial<SanctionCandidate>): SanctionCandidate => ({
   aliases: [],
   flag: null,
   listingDate: null,
+  programs: [],
   ...over,
 });
 
@@ -142,12 +143,14 @@ describe('match', () => {
       aliases: ['ABADAN'],
       flag: 'Iran',
       listingDate: '2020-01-15',
+      programs: ['IRAN'],
     });
     const result = match({ imo: '9187629', mmsi: null, name: null }, [row]);
     expect(result.matches[0]).toMatchObject({
       aliases: ['ABADAN'],
       flag: 'Iran',
       listingDate: '2020-01-15',
+      programs: ['IRAN'],
     });
   });
 });

@@ -72,7 +72,8 @@ export class EnrichmentRepository {
         mmsi,
         aliases,
         flag,
-        listing_date AS "listingDate"
+        listing_date AS "listingDate",
+        programs
       FROM sanctioned_entities
     `);
     return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
@@ -84,6 +85,7 @@ export class EnrichmentRepository {
       mmsi: (r.mmsi as string | null) ?? null,
       aliases: (r.aliases as string[] | null) ?? [],
       flag: (r.flag as string | null) ?? null,
+      programs: (r.programs as string[] | null) ?? [],
       listingDate:
         r.listingDate === null || r.listingDate === undefined
           ? null

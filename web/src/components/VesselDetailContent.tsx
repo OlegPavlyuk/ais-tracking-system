@@ -185,10 +185,22 @@ function matchMethodLabel(method: string): string {
 }
 
 function MatchItem({ match }: { match: VesselSanctionMatch }) {
+  const programs = match.programs ?? [];
+
   return (
-    <div className="flex items-center justify-between gap-2 rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs">
-      <span className="shrink-0 font-medium text-slate-700">{sourceLabel(match.source)}</span>
-      <span className="text-right text-slate-600">{matchMethodLabel(match.matchMethod)}</span>
+    <div className="text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="shrink-0 font-medium text-slate-700">{sourceLabel(match.source)}</span>
+        <span className="text-right text-xs text-slate-600">{matchMethodLabel(match.matchMethod)}</span>
+      </div>
+      {programs.length > 0 && (
+        <div className="mt-1.5">
+          <div className={labelClassName}>Programs</div>
+          <div className="mt-0.5 break-words text-[11px] leading-snug text-slate-600">
+            {programs.join(', ')}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -199,8 +211,7 @@ function SanctionsMatchList({ matches }: { matches: VesselSanctionMatch[] }) {
   const hiddenCount = matches.length - visibleMatches.length;
 
   return (
-    <div className="mt-2 space-y-1">
-      <div className={labelClassName}>Match details</div>
+    <div className="mt-2 space-y-2">
       {visibleMatches.map((match) => (
         <MatchItem key={match.id} match={match} />
       ))}

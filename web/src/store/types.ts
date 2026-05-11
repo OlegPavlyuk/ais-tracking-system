@@ -6,6 +6,7 @@ export interface VesselSanctionMatch {
   entityName: string;
   matchMethod: string;
   score: number | null;
+  programs?: string[];
 }
 
 export interface Vessel {

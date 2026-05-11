@@ -177,6 +177,7 @@ export function applyEnriched(
       entityName: m.name,
       matchMethod: m.matchMethod,
       score: null,
+      programs: m.programs,
     }));
 
   const next = new Map(prev);

@@ -41,6 +41,7 @@ describe('EnrichmentRepository.applyEnrichment', () => {
     aliases: [],
     flag: 'Iran',
     listingDate: '2020-01-15',
+    programs: ['IRAN'],
   };
 
   it('emits a freshness-guarded UPDATE comparing sanctions_checked_at < checkedAt', async () => {
@@ -103,5 +104,36 @@ describe('EnrichmentRepository.applyEnrichment', () => {
       checkedAt: '2026-04-01T00:00:00.000Z',
     });
     expect(updated).toBe(0);
+  });
+});
+
+describe('EnrichmentRepository.loadAllSanctionCandidates', () => {
+  it('loads programs from sanctioned_entities into match candidates', async () => {
+    const cap = captured();
+    cap.setResult([
+      {
+        id: 'e1',
+        source: 'ofac',
+        sourceEntityId: '15036',
+        name: 'ARTAVIL',
+        imo: '9187629',
+        mmsi: null,
+        aliases: ['ABADAN'],
+        flag: 'Iran',
+        listingDate: null,
+        programs: ['IRAN', 'NPWMD'],
+      },
+    ]);
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+
+    const rows = await repo.loadAllSanctionCandidates();
+
+    expect(cap.lastQuery().sql).toMatch(/programs/i);
+    expect(rows[0]).toMatchObject({
+      entityId: 'e1',
+      source: 'ofac',
+      sourceEntityId: '15036',
+      programs: ['IRAN', 'NPWMD'],
+    });
   });
 });

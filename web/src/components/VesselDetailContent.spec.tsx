@@ -203,6 +203,7 @@ describe('VesselDetailContent', () => {
           entityName: 'BIANCA',
           matchMethod: 'name_candidate',
           score: null,
+          programs: ['IRAN', 'NPWMD'],
         },
       ],
     });
@@ -213,9 +214,39 @@ describe('VesselDetailContent', () => {
     expect(screen.getByText('Candidate')).toBeInTheDocument();
     expect(screen.getByText('OFAC')).toBeInTheDocument();
     expect(screen.getByText('Match by name')).toBeInTheDocument();
+    expect(screen.getByText('Programs')).toBeInTheDocument();
+    expect(screen.getByText('IRAN, NPWMD')).toBeInTheDocument();
     expect(screen.queryByText('BIANCA')).not.toBeInTheDocument();
     expect(screen.queryByText(/NaN%/)).not.toBeInTheDocument();
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('does not render programs row when sanctions match programs are absent or empty', () => {
+    seedVessel({
+      vesselId: null,
+      sanctionsStatus: 'candidate',
+      sanctionsMatches: [
+        {
+          id: 'm1',
+          source: 'ofac',
+          entityName: 'BIANCA',
+          matchMethod: 'name_candidate',
+          score: null,
+        },
+        {
+          id: 'm2',
+          source: 'ofac',
+          entityName: 'EMPTY PROGRAMS',
+          matchMethod: 'imo',
+          score: null,
+          programs: [],
+        },
+      ],
+    });
+
+    renderContent('123456789');
+
+    expect(screen.queryByText(/Programs:/)).not.toBeInTheDocument();
   });
 
   it('expands sanctions matches beyond the first two', () => {

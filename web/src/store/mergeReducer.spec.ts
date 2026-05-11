@@ -425,6 +425,7 @@ describe('applyEnriched', () => {
             aliases: [],
             flag: null,
             listingDate: null,
+            programs: ['IRAN', 'NPWMD'],
           },
         ],
       }),
@@ -432,7 +433,14 @@ describe('applyEnriched', () => {
     const v = next.get(MMSI_A) as Vessel;
     expect(v.sanctionsStatus).toBe('sanctioned');
     expect(v.sanctionsMatches).toEqual([
-      { id: 'e-1', source: 'ofac', entityName: 'DANGER CORP', matchMethod: 'imo', score: null },
+      {
+        id: 'e-1',
+        source: 'ofac',
+        entityName: 'DANGER CORP',
+        matchMethod: 'imo',
+        score: null,
+        programs: ['IRAN', 'NPWMD'],
+      },
     ]);
   });
 
@@ -456,6 +464,7 @@ describe('applyEnriched', () => {
             aliases: [],
             flag: null,
             listingDate: null,
+            programs: [],
           },
           {
             entityId: 'e-bad',
@@ -466,6 +475,7 @@ describe('applyEnriched', () => {
             aliases: [],
             flag: null,
             listingDate: null,
+            programs: [],
           },
         ],
       }),

@@ -31,6 +31,7 @@ describe('enrichment loop (dispatcher + processor)', () => {
       aliases: ['ABADAN'],
       flag: 'Iran',
       listingDate: null,
+      programs: ['IRAN'],
     };
 
     const repo = {
@@ -134,6 +135,7 @@ describe('enrichment loop (dispatcher + processor)', () => {
           sourceEntityId: '15036',
           matchMethod: 'imo',
           flag: 'Iran',
+          programs: ['IRAN'],
         }),
       ],
     });
