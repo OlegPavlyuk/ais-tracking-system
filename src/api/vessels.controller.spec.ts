@@ -37,6 +37,8 @@ describe('VesselsController', () => {
       navStatus: null,
       occurredAt: lastSeenAt,
       lastSeenAt,
+      sanctionsStatus: null,
+      sanctionsCheckedAt: null,
       ...overrides,
     };
   }

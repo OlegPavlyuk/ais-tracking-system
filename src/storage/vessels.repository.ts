@@ -22,6 +22,8 @@ export interface VesselSnapshotRow {
   navStatus: number | null;
   occurredAt: string;
   lastSeenAt: string;
+  sanctionsStatus: 'clear' | 'candidate' | 'sanctioned' | null;
+  sanctionsCheckedAt: string | null;
 }
 
 export interface TrackPoint {
@@ -305,7 +307,9 @@ export class VesselsRepository {
           p.true_heading    AS "trueHeading",
           p.nav_status      AS "navStatus",
           p.occurred_at     AS "occurredAt",
-          p.last_seen_at    AS "lastSeenAt"
+          p.last_seen_at    AS "lastSeenAt",
+          v.sanctions_status     AS "sanctionsStatus",
+          v.sanctions_checked_at AS "sanctionsCheckedAt"
         FROM vessel_positions_latest p
         JOIN vessels v ON v.id = p.vessel_id
         WHERE p.last_seen_at >= ${since}

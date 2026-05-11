@@ -9,6 +9,7 @@ const DEFAULT_ZOOM = 4;
 const VESSEL_ICON_ID = MapViewIds.vesselIconId;
 const VESSELS_SOURCE_ID = MapViewIds.vesselsSourceId;
 const VESSELS_LAYER_ID = MapViewIds.vesselsLayerId;
+const VESSELS_SANCTIONS_HALO_LAYER_ID = MapViewIds.vesselSanctionsHaloLayerId;
 const VESSELS_CIRCLE_LAYER_ID = MapViewIds.vesselCircleLayerId;
 
 const VESSEL_ICON_SIZE = 48;
@@ -43,6 +44,7 @@ export function MapView({ onReady }: MapViewProps) {
       void registerVesselIcon(map).then(() => {
         if (cancelled) return;
         addVesselsSource(map);
+        addVesselsSanctionsHaloLayer(map);
         addVesselsCircleLayer(map);
         addVesselsArrowLayer(map);
         onReadyRef.current(map);
@@ -89,6 +91,64 @@ function addVesselsSource(map: MlMap): void {
     map.addSource(VESSELS_SOURCE_ID, {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
+    });
+  }
+}
+
+function addVesselsSanctionsHaloLayer(map: MlMap): void {
+  if (!map.getLayer(VESSELS_SANCTIONS_HALO_LAYER_ID)) {
+    map.addLayer({
+      id: VESSELS_SANCTIONS_HALO_LAYER_ID,
+      type: 'circle',
+      source: VESSELS_SOURCE_ID,
+      filter: [
+        'any',
+        ['==', ['get', 'sanctionsStatus'], 'candidate'],
+        ['==', ['get', 'sanctionsStatus'], 'sanctioned'],
+      ],
+      paint: {
+        'circle-radius': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          4,
+          ['case', ['==', ['get', 'sanctionsStatus'], 'sanctioned'], 13, 11],
+          10,
+          ['case', ['==', ['get', 'sanctionsStatus'], 'sanctioned'], 18, 15],
+          14,
+          ['case', ['==', ['get', 'sanctionsStatus'], 'sanctioned'], 25, 21],
+        ],
+        'circle-color': [
+          'case',
+          ['==', ['get', 'sanctionsStatus'], 'sanctioned'],
+          '#DC2626',
+          '#F59E0B',
+        ],
+        'circle-opacity': [
+          'case',
+          ['==', ['get', 'sanctionsStatus'], 'sanctioned'],
+          0.16,
+          0.1,
+        ],
+        'circle-stroke-color': [
+          'case',
+          ['==', ['get', 'sanctionsStatus'], 'sanctioned'],
+          '#DC2626',
+          '#F59E0B',
+        ],
+        'circle-stroke-width': [
+          'case',
+          ['==', ['get', 'sanctionsStatus'], 'sanctioned'],
+          2.5,
+          1.75,
+        ],
+        'circle-stroke-opacity': [
+          'case',
+          ['==', ['get', 'sanctionsStatus'], 'sanctioned'],
+          0.85,
+          0.7,
+        ],
+      },
     });
   }
 }

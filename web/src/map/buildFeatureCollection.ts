@@ -10,6 +10,7 @@ export interface VesselFeatureProps {
   rotation: number;
   shipType: number | null;
   color: string;
+  sanctionsStatus: 'clear' | 'candidate' | 'sanctioned' | null;
   navStatusLabel: string;
   markerShape: 'arrow' | 'circle';
   occurredAt: string | null;
@@ -48,6 +49,7 @@ export function buildFeatureCollection(
         rotation,
         shipType: v.shipType,
         color: shipTypeColor(v.shipType),
+        sanctionsStatus: v.sanctionsStatus,
         navStatusLabel: navStatusLabel(v.navStatus),
         markerShape: markerShape(v.navStatus, v.sog),
         occurredAt: v.occurredAt,

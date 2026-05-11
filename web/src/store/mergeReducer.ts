@@ -1,4 +1,5 @@
 import type {
+  VesselDetailRow,
   PositionEvent,
   SnapshotRow,
   StaticEvent,
@@ -84,9 +85,33 @@ export function applySnapshotRows(
     merged.name = preferNonNull(row.name, base.name);
     merged.callSign = preferNonNull(row.callSign, base.callSign);
     merged.shipType = preferNonNull(row.shipType, base.shipType);
+    if (isNewer(row.sanctionsCheckedAt, base.sanctionsCheckedAt)) {
+      merged.sanctionsStatus = row.sanctionsStatus;
+      merged.sanctionsCheckedAt = row.sanctionsCheckedAt;
+    }
 
     next.set(row.mmsi, merged);
   }
+  return next;
+}
+
+export function applyDetailSanctions(
+  prev: ReadonlyMap<string, Vessel>,
+  row: VesselDetailRow,
+): Map<string, Vessel> {
+  const base = prev.get(row.mmsi) ?? emptyVessel(row.mmsi);
+  if (!isNewer(row.sanctionsCheckedAt, base.sanctionsCheckedAt)) {
+    return prev as Map<string, Vessel>;
+  }
+
+  const next = new Map(prev);
+  next.set(row.mmsi, {
+    ...base,
+    vesselId: row.id,
+    sanctionsStatus: row.sanctionsStatus,
+    sanctionsCheckedAt: row.sanctionsCheckedAt,
+    sanctionsMatches: row.sanctionsMatches,
+  });
   return next;
 }
 

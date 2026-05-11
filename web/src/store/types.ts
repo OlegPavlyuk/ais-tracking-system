@@ -48,6 +48,8 @@ export interface SnapshotRow {
   navStatus: number | null;
   occurredAt: string;
   lastSeenAt: string;
+  sanctionsStatus: 'clear' | 'candidate' | 'sanctioned' | null;
+  sanctionsCheckedAt: string | null;
 }
 
 export type { PositionEvent, StaticEvent, VesselEnrichedEvent };

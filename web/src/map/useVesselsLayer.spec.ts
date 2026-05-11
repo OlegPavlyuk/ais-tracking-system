@@ -36,7 +36,15 @@ describe('buildFeatureCollection', () => {
 
   it('includes mmsi, rotation, shipType, and color in feature properties', () => {
     const vessels = new Map([
-      ['a', makeVessel({ mmsi: '123456789', cog: 90, shipType: 70 })],
+      [
+        'a',
+        makeVessel({
+          mmsi: '123456789',
+          cog: 90,
+          shipType: 70,
+          sanctionsStatus: 'candidate',
+        }),
+      ],
     ]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features).toHaveLength(1);
@@ -45,6 +53,7 @@ describe('buildFeatureCollection', () => {
     expect(props.rotation).toBe(90);
     expect(props.shipType).toBe(70);
     expect(props.color).toBe('#2ECC71'); // Cargo
+    expect(props.sanctionsStatus).toBe('candidate');
   });
 
   it('uses Unknown/Other color when shipType is null', () => {

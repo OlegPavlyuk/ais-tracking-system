@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyDetailSanctions,
   applyEnriched,
   applyPosition,
   applySnapshotRows,
@@ -27,6 +28,8 @@ function snapshotRow(overrides: Partial<SnapshotRow> = {}): SnapshotRow {
     navStatus: 0,
     occurredAt: '2024-01-01T00:00:00.000Z',
     lastSeenAt: '2024-01-01T00:00:00.000Z',
+    sanctionsStatus: null,
+    sanctionsCheckedAt: null,
     ...overrides,
   };
 }
@@ -250,6 +253,119 @@ describe('applySnapshotRows', () => {
   it('always sets vesselId from the snapshot row', () => {
     const next = applySnapshotRows(new Map(), [snapshotRow({ id: 'v-42' })]);
     expect((next.get(MMSI_A) as Vessel).vesselId).toBe('v-42');
+  });
+
+  it('merges newer sanctions status from snapshot rows', () => {
+    const seeded = new Map<string, Vessel>([
+      [
+        MMSI_A,
+        {
+          ...emptyVessel(MMSI_A),
+          sanctionsStatus: null,
+          sanctionsCheckedAt: null,
+        },
+      ],
+    ]);
+    const next = applySnapshotRows(seeded, [
+      snapshotRow({
+        sanctionsStatus: 'candidate',
+        sanctionsCheckedAt: '2024-01-01T00:10:00.000Z',
+      }),
+    ]);
+    const v = next.get(MMSI_A) as Vessel;
+    expect(v.sanctionsStatus).toBe('candidate');
+    expect(v.sanctionsCheckedAt).toBe('2024-01-01T00:10:00.000Z');
+  });
+
+  it('does not overwrite newer sanctions status with an older snapshot row', () => {
+    const seeded = new Map<string, Vessel>([
+      [
+        MMSI_A,
+        {
+          ...emptyVessel(MMSI_A),
+          sanctionsStatus: 'sanctioned',
+          sanctionsCheckedAt: '2024-01-01T00:20:00.000Z',
+        },
+      ],
+    ]);
+    const next = applySnapshotRows(seeded, [
+      snapshotRow({
+        sanctionsStatus: 'clear',
+        sanctionsCheckedAt: '2024-01-01T00:10:00.000Z',
+      }),
+    ]);
+    const v = next.get(MMSI_A) as Vessel;
+    expect(v.sanctionsStatus).toBe('sanctioned');
+    expect(v.sanctionsCheckedAt).toBe('2024-01-01T00:20:00.000Z');
+  });
+});
+
+describe('applyDetailSanctions', () => {
+  it('merges newer sanctions status from a vessel detail row', () => {
+    const next = applyDetailSanctions(new Map(), {
+      id: 'vessel-detail-id',
+      mmsi: MMSI_A,
+      imo: null,
+      name: null,
+      callSign: null,
+      shipType: null,
+      destination: null,
+      dimensionToBow: null,
+      dimensionToStern: null,
+      dimensionToPort: null,
+      dimensionToStarboard: null,
+      sanctionsStatus: 'candidate',
+      sanctionsCheckedAt: '2024-01-01T00:10:00.000Z',
+      sanctionsMatches: [
+        {
+          id: 'match-1',
+          source: 'ofac',
+          entityName: 'MATCHED VESSEL',
+          matchMethod: 'name_candidate',
+          score: null,
+        },
+      ],
+      position: null,
+    });
+
+    const v = next.get(MMSI_A) as Vessel;
+    expect(v.vesselId).toBe('vessel-detail-id');
+    expect(v.sanctionsStatus).toBe('candidate');
+    expect(v.sanctionsMatches).toHaveLength(1);
+  });
+
+  it('does not overwrite newer enriched sanctions status with older detail data', () => {
+    const seeded = new Map<string, Vessel>([
+      [
+        MMSI_A,
+        {
+          ...emptyVessel(MMSI_A),
+          sanctionsStatus: 'sanctioned',
+          sanctionsCheckedAt: '2024-01-01T00:20:00.000Z',
+        },
+      ],
+    ]);
+
+    const next = applyDetailSanctions(seeded, {
+      id: 'vessel-detail-id',
+      mmsi: MMSI_A,
+      imo: null,
+      name: null,
+      callSign: null,
+      shipType: null,
+      destination: null,
+      dimensionToBow: null,
+      dimensionToStern: null,
+      dimensionToPort: null,
+      dimensionToStarboard: null,
+      sanctionsStatus: 'clear',
+      sanctionsCheckedAt: '2024-01-01T00:10:00.000Z',
+      sanctionsMatches: [],
+      position: null,
+    });
+
+    expect(next).toBe(seeded);
+    expect((next.get(MMSI_A) as Vessel).sanctionsStatus).toBe('sanctioned');
   });
 });
 

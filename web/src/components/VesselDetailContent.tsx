@@ -1,4 +1,4 @@
-import { useState, type ElementType } from 'react';
+import { useEffect, useState, type ElementType } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import {
@@ -247,6 +247,11 @@ export function VesselDetailContent({ mmsi, vesselId: initialVesselId = null, on
     retry: 1,
     refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    if (!queryData) return;
+    useVesselsStore.getState().applyDetailSanctions(queryData);
+  }, [queryData]);
 
   const sanctionsStatus = vessel?.sanctionsStatus ?? queryData?.sanctionsStatus ?? null;
   const sanctionsMatches: VesselDetailRow['sanctionsMatches'] =

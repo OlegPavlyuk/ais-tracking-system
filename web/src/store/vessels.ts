@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   applyEnriched,
+  applyDetailSanctions,
   applyPosition,
   applySnapshotRows,
   applyStatic,
@@ -12,6 +13,7 @@ import type {
   SnapshotRow,
   StaticEvent,
   Vessel,
+  VesselDetailRow,
   VesselEnrichedEvent,
 } from './types';
 import type { ApiErrorData } from '@/api/client';
@@ -31,6 +33,7 @@ interface VesselsState {
   applyPosition: (ev: PositionEvent) => void;
   applyStatic: (ev: StaticEvent) => void;
   applyEnriched: (ev: VesselEnrichedEvent) => void;
+  applyDetailSanctions: (row: VesselDetailRow) => void;
 }
 
 export const useVesselsStore = create<VesselsState>((set) => ({
@@ -63,6 +66,11 @@ export const useVesselsStore = create<VesselsState>((set) => ({
   applyEnriched: (ev) =>
     set((s) => {
       const next = applyEnriched(s.vessels, ev);
+      return next === s.vessels ? {} : { vessels: next };
+    }),
+  applyDetailSanctions: (row) =>
+    set((s) => {
+      const next = applyDetailSanctions(s.vessels, row);
       return next === s.vessels ? {} : { vessels: next };
     }),
 }));
