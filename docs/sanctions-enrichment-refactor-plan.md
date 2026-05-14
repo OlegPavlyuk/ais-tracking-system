@@ -31,22 +31,24 @@ Current status:
 - [x] Phase 0 — Documentation / plan file creation
 - [x] Phase 1 — Remove stale import script
 - [x] Phase 2 — Bootstrap sanctions import lifecycle
-- [ ] Phase 3 — Targeted sanctions lookup for enrichment
+- [x] Phase 3 — Targeted sanctions lookup for enrichment
 - [ ] Phase 4 — Raw SQL to Drizzle cleanup where appropriate
 - [ ] Optional later phase — Import freshness / status visibility
 
 Current phase:
 
-- Phase 2 is complete. Worker/all startup now enqueues a bootstrap sanctions
-  import when no successful import exists for the source.
+- Phase 3 is complete. Vessel enrichment now uses targeted sanctions candidate
+  lookups by IMO, MMSI, and exact name/alias fallback instead of loading every
+  sanctioned entity for each job.
 
 What should be done next:
 
-- After Phase 2 is reviewed and committed, begin Phase 3: targeted sanctions
-  lookup for enrichment.
-- Keep Phase 3 scoped to replacing full-table candidate scans during vessel
-  enrichment. Do not add alias schema redesign, fuzzy matching, migrations, or
-  Drizzle cleanup in that phase.
+- After Phase 3 is reviewed and committed, begin Phase 4: raw SQL to Drizzle
+  cleanup where appropriate.
+- Keep Phase 4 scoped to routine sanctions/enrichment CRUD cleanup. Leave raw
+  SQL in place where it remains clearer or technically appropriate, such as
+  advisory locks, PostGIS, partition DDL, complex bulk operations, and complex
+  JSON/array operations.
 
 Relevant files by phase:
 
@@ -99,6 +101,14 @@ Important notes discovered so far:
 - Import execution uses a source-scoped Postgres session advisory lock acquired
   and released on the same reserved `postgres.js` connection: namespace key
   `1934910515`, source key `hashtext(source)`.
+- Phase 3 removed the vessel enrichment full-table sanctions scan. Enrichment
+  now queries IMO and MMSI candidates first, returns `sanctioned` for identifier
+  matches, and skips name fallback when any identifier match exists.
+- Phase 3 name fallback is intentionally narrower than the previous full-table
+  normalized comparison: it queries only exact DB `name` matches or exact
+  `aliases` array containment, then keeps existing matcher normalization over
+  that narrow candidate set. No alias schema redesign, fuzzy matching,
+  migrations, or normalized name columns were added.
 - If clarification is needed during any phase, ask before implementing silent
   assumptions.
 
@@ -534,10 +544,30 @@ the conservative matching behavior suitable for a sanctions MVP.
 
 ### Implementation Notes
 
-- Capture important discoveries, rejected alternatives, edge cases,
-  operational caveats, or architectural findings here during implementation.
-- Record any intentionally narrowed name/alias behavior here so future work can
-  decide whether normalized columns or alias tables are worth adding.
+- Added targeted repository methods:
+  `findSanctionCandidatesByImo(imo)`,
+  `findSanctionCandidatesByMmsi(mmsi)`, and
+  `findSanctionCandidatesByName(name)`.
+- Removed the `loadAllSanctionCandidates()` repository method after migrating
+  the processor, so vessel enrichment no longer has a full-table candidate scan
+  path.
+- `EnrichmentProcessor` now queries identifier candidates first and runs the
+  existing pure matcher over only those candidates. If the matcher returns
+  `sanctioned`, name fallback is skipped so identifier matches continue to
+  suppress name-only candidates.
+- If identifier lookups produce no sanctions match, the processor performs name
+  fallback only when the vessel has a useful normalized name.
+- Name fallback is deliberately conservative in this phase. The repository uses
+  exact `name = $1` or exact `aliases @> ARRAY[$1]::text[]` lookup and does not
+  attempt fuzzy matching, full-table normalization, generated columns,
+  migrations, or alias-table redesign.
+- Existing matcher behavior remains unchanged for a supplied candidate set:
+  exact IMO/MMSI matches produce `sanctioned`, name/alias matches produce
+  `candidate`, duplicate entity matches are deduped, and display fields remain
+  in match payloads.
+- Checks run:
+  - `pnpm test -- src/enrichment/vessel`
+  - `pnpm typecheck`
 
 ## Phase 4: Raw SQL to Drizzle Cleanup Where Appropriate
 

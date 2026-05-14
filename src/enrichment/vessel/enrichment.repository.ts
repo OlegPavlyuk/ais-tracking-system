@@ -4,7 +4,7 @@ import { Counter, Histogram } from 'prom-client';
 import { sql } from 'drizzle-orm';
 import { DbService } from '../../shared/db/db.service';
 import { DB_QUERY_DURATION_SECONDS, DB_WRITES_TOTAL } from '../../shared/metrics/metric-names';
-import { SanctionCandidate, SanctionMatch, SanctionsStatus } from './matcher';
+import { normalizeName, SanctionCandidate, SanctionMatch, SanctionsStatus } from './matcher';
 
 export interface VesselFingerprint {
   id: string;
@@ -57,11 +57,28 @@ export class EnrichmentRepository {
     };
   }
 
-  async loadAllSanctionCandidates(): Promise<SanctionCandidate[]> {
-    return this.timed('enrichment.loadSanctionCandidates', () => this.loadAllSanctionCandidatesInner());
+  async findSanctionCandidatesByImo(imo: string): Promise<SanctionCandidate[]> {
+    return this.timed('enrichment.findSanctionCandidatesByImo', () =>
+      this.loadSanctionCandidates(sql`imo = ${imo}`),
+    );
   }
 
-  private async loadAllSanctionCandidatesInner(): Promise<SanctionCandidate[]> {
+  async findSanctionCandidatesByMmsi(mmsi: string): Promise<SanctionCandidate[]> {
+    return this.timed('enrichment.findSanctionCandidatesByMmsi', () =>
+      this.loadSanctionCandidates(sql`mmsi = ${mmsi}`),
+    );
+  }
+
+  async findSanctionCandidatesByName(name: string | null): Promise<SanctionCandidate[]> {
+    if (normalizeName(name).length === 0) return [];
+    return this.timed('enrichment.findSanctionCandidatesByName', () =>
+      this.loadSanctionCandidates(sql`name = ${name} OR aliases @> ARRAY[${name}]::text[]`),
+    );
+  }
+
+  private async loadSanctionCandidates(
+    where: ReturnType<typeof sql>,
+  ): Promise<SanctionCandidate[]> {
     const rows = await this.dbs.db.execute(sql`
       SELECT
         id,
@@ -75,8 +92,15 @@ export class EnrichmentRepository {
         listing_date AS "listingDate",
         programs
       FROM sanctioned_entities
+      WHERE ${where}
     `);
-    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) =>
+      this.mapSanctionCandidate(r),
+    );
+  }
+
+  private mapSanctionCandidate(r: Record<string, unknown>): SanctionCandidate {
+    return {
       entityId: r.id as string,
       source: r.source as string,
       sourceEntityId: r.sourceEntityId as string,
@@ -90,9 +114,9 @@ export class EnrichmentRepository {
         r.listingDate === null || r.listingDate === undefined
           ? null
           : r.listingDate instanceof Date
-            ? (r.listingDate.toISOString().slice(0, 10))
+            ? r.listingDate.toISOString().slice(0, 10)
             : String(r.listingDate),
-    }));
+    };
   }
 
   /**

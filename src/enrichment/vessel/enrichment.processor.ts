@@ -9,10 +9,7 @@ import { SCHEMA_VERSION, VesselEnrichedEvent } from '../../contracts';
 import { EVENT_BUS, EventBus } from '../../shared/bus/event-bus';
 import { VESSEL_ENRICHED_STREAM } from '../../shared/config/constants';
 import { ConfigService } from '../../shared/config/config.service';
-import {
-  ENRICHMENT_JOBS_TOTAL,
-  SANCTIONS_MATCHES_TOTAL,
-} from '../../shared/metrics/metric-names';
+import { ENRICHMENT_JOBS_TOTAL, SANCTIONS_MATCHES_TOTAL } from '../../shared/metrics/metric-names';
 import {
   ENRICHMENT_REDIS,
   ENRICHMENT_VESSEL_QUEUE,
@@ -22,7 +19,7 @@ import {
   profileKey,
 } from './enrichment-dispatcher';
 import { EnrichmentRepository } from './enrichment.repository';
-import { match } from './matcher';
+import { match, MatchInput, MatchResult, normalizeName, SanctionCandidate } from './matcher';
 
 @Processor(ENRICHMENT_VESSEL_QUEUE, { concurrency: 1 })
 export class EnrichmentProcessor extends WorkerHost {
@@ -47,19 +44,16 @@ export class EnrichmentProcessor extends WorkerHost {
     const { vesselId, mmsi, traceId } = job.data;
     const fingerprint = await this.repo.findVesselFingerprintByMmsi(mmsi);
     if (!fingerprint || fingerprint.id !== vesselId) {
-      this.pino.warn(
-        { vesselId, mmsi, traceId },
-        'vessel not resolvable; skipping',
-      );
+      this.pino.warn({ vesselId, mmsi, traceId }, 'vessel not resolvable; skipping');
       this.jobsCounter.inc({ status: 'skipped' });
       return { status: 'skipped', matches: 0 };
     }
 
-    const candidates = await this.repo.loadAllSanctionCandidates();
-    const result = match(
-      { imo: fingerprint.imo, mmsi: fingerprint.mmsi, name: fingerprint.name },
-      candidates,
-    );
+    const result = await this.matchSanctions({
+      imo: fingerprint.imo,
+      mmsi: fingerprint.mmsi,
+      name: fingerprint.name,
+    });
 
     const checkedAt = new Date().toISOString();
     const updated = await this.repo.applyEnrichment({
@@ -70,10 +64,7 @@ export class EnrichmentProcessor extends WorkerHost {
     });
 
     if (updated === 0) {
-      this.pino.debug(
-        { vesselId, mmsi, traceId },
-        'enrichment guard skipped update',
-      );
+      this.pino.debug({ vesselId, mmsi, traceId }, 'enrichment guard skipped update');
       this.jobsCounter.inc({ status: 'noop' });
       return { status: 'noop', matches: result.matches.length };
     }
@@ -110,5 +101,24 @@ export class EnrichmentProcessor extends WorkerHost {
       'enriched',
     );
     return { status: result.status, matches: result.matches.length };
+  }
+
+  private async matchSanctions(input: MatchInput): Promise<MatchResult> {
+    const identifierCandidates: SanctionCandidate[] = [];
+    if (input.imo) {
+      identifierCandidates.push(...(await this.repo.findSanctionCandidatesByImo(input.imo)));
+    }
+    if (input.mmsi) {
+      identifierCandidates.push(...(await this.repo.findSanctionCandidatesByMmsi(input.mmsi)));
+    }
+
+    const identifierResult = match(input, identifierCandidates);
+    if (identifierResult.status === 'sanctioned') return identifierResult;
+
+    const nameCandidates =
+      normalizeName(input.name).length > 0
+        ? await this.repo.findSanctionCandidatesByName(input.name)
+        : [];
+    return match(input, nameCandidates);
   }
 }

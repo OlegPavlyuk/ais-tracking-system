@@ -1,10 +1,6 @@
 import { Job } from 'bullmq';
 import { CanonicalEvent } from '../../contracts';
-import {
-  EnrichmentDispatcher,
-  EnrichmentJobData,
-  profileHashFor,
-} from './enrichment-dispatcher';
+import { EnrichmentDispatcher, EnrichmentJobData, profileHashFor } from './enrichment-dispatcher';
 import { EnrichmentProcessor } from './enrichment.processor';
 import { EnrichmentRepository, VesselFingerprint } from './enrichment.repository';
 import { SanctionCandidate } from './matcher';
@@ -38,7 +34,9 @@ describe('enrichment loop (dispatcher + processor)', () => {
       findVesselFingerprintByMmsi: jest.fn(async (mmsi: string) =>
         mmsi === vessel.mmsi ? vessel : null,
       ),
-      loadAllSanctionCandidates: jest.fn(async () => [sanctioned]),
+      findSanctionCandidatesByImo: jest.fn(async () => [sanctioned]),
+      findSanctionCandidatesByMmsi: jest.fn(async () => []),
+      findSanctionCandidatesByName: jest.fn(async () => []),
       applyEnrichment: jest.fn(async () => 1),
     } as unknown as EnrichmentRepository;
 
@@ -52,12 +50,15 @@ describe('enrichment loop (dispatcher + processor)', () => {
       expire: jest.fn(async () => 1),
     };
 
-    const queueCalls: { name: string; data: EnrichmentJobData; opts?: Record<string, unknown> }[] = [];
+    const queueCalls: { name: string; data: EnrichmentJobData; opts?: Record<string, unknown> }[] =
+      [];
     const queue = {
-      add: jest.fn(async (name: string, data: EnrichmentJobData, opts?: Record<string, unknown>) => {
-        queueCalls.push({ name, data, opts });
-        return undefined;
-      }),
+      add: jest.fn(
+        async (name: string, data: EnrichmentJobData, opts?: Record<string, unknown>) => {
+          queueCalls.push({ name, data, opts });
+          return undefined;
+        },
+      ),
     };
 
     const dispatcher = new EnrichmentDispatcher(
@@ -116,6 +117,9 @@ describe('enrichment loop (dispatcher + processor)', () => {
     const result = await processor.process(job);
 
     expect(result).toEqual({ status: 'sanctioned', matches: 1 });
+    expect(repo.findSanctionCandidatesByImo).toHaveBeenCalledWith('9187629');
+    expect(repo.findSanctionCandidatesByMmsi).toHaveBeenCalledWith('572469210');
+    expect(repo.findSanctionCandidatesByName).not.toHaveBeenCalled();
     expect(repo.applyEnrichment).toHaveBeenCalledTimes(1);
     expect((repo.applyEnrichment as jest.Mock).mock.calls[0]![0]).toMatchObject({
       vesselId: 'v-1',
@@ -155,7 +159,9 @@ describe('enrichment loop (dispatcher + processor)', () => {
     };
     const repo = {
       findVesselFingerprintByMmsi: jest.fn(async () => vessel),
-      loadAllSanctionCandidates: jest.fn(async () => []),
+      findSanctionCandidatesByImo: jest.fn(async () => []),
+      findSanctionCandidatesByMmsi: jest.fn(async () => []),
+      findSanctionCandidatesByName: jest.fn(async () => []),
       applyEnrichment: jest.fn(async () => 0),
     } as unknown as EnrichmentRepository;
     const bus: EventBus = { publish: jest.fn(), subscribe: jest.fn() };
@@ -185,5 +191,126 @@ describe('enrichment loop (dispatcher + processor)', () => {
     expect(result).toEqual({ status: 'noop', matches: 0 });
     expect(bus.publish).not.toHaveBeenCalled();
     expect(redis.set).not.toHaveBeenCalled();
+  });
+
+  it('falls back to name lookup when identifiers do not match', async () => {
+    const vessel: VesselFingerprint = {
+      id: 'v-3',
+      mmsi: '572469211',
+      imo: '9187630',
+      name: 'ARTAVIL',
+    };
+    const sanctioned: SanctionCandidate = {
+      entityId: 'e-2',
+      source: 'ofac',
+      sourceEntityId: '15037',
+      name: 'ARTAVIL',
+      imo: null,
+      mmsi: null,
+      aliases: [],
+      flag: 'Iran',
+      listingDate: null,
+      programs: ['IRAN'],
+    };
+    const repo = {
+      findVesselFingerprintByMmsi: jest.fn(async () => vessel),
+      findSanctionCandidatesByImo: jest.fn(async () => []),
+      findSanctionCandidatesByMmsi: jest.fn(async () => []),
+      findSanctionCandidatesByName: jest.fn(async () => [sanctioned]),
+      applyEnrichment: jest.fn(async () => 1),
+    } as unknown as EnrichmentRepository;
+    const bus: EventBus = { publish: jest.fn(async () => '1-0'), subscribe: jest.fn() };
+    const redis = { set: jest.fn(), get: jest.fn() };
+    const config = {
+      get: jest.fn(() => 604800),
+    } as unknown as ConfigService;
+    const processor = new EnrichmentProcessor(
+      repo,
+      bus,
+      redis as never,
+      config,
+      stubCounter(),
+      stubCounter(),
+      stubPinoLogger(),
+    );
+
+    const result = await processor.process({
+      id: 'j',
+      data: {
+        vesselId: vessel.id,
+        mmsi: vessel.mmsi,
+        trigger: 'profile_changed',
+        profileHash: 'abc',
+        observedImo: vessel.imo,
+        observedName: vessel.name,
+      },
+    } as unknown as Job<EnrichmentJobData>);
+
+    expect(result).toEqual({ status: 'candidate', matches: 1 });
+    expect(repo.findSanctionCandidatesByName).toHaveBeenCalledWith('ARTAVIL');
+    expect(repo.applyEnrichment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vesselId: 'v-3',
+        status: 'candidate',
+        matches: [
+          expect.objectContaining({
+            sourceEntityId: '15037',
+            matchMethod: 'name_candidate',
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('does not attempt name fallback when no useful name exists', async () => {
+    const vessel: VesselFingerprint = {
+      id: 'v-4',
+      mmsi: '572469212',
+      imo: null,
+      name: null,
+    };
+    const repo = {
+      findVesselFingerprintByMmsi: jest.fn(async () => vessel),
+      findSanctionCandidatesByImo: jest.fn(async () => []),
+      findSanctionCandidatesByMmsi: jest.fn(async () => []),
+      findSanctionCandidatesByName: jest.fn(async () => []),
+      applyEnrichment: jest.fn(async () => 1),
+    } as unknown as EnrichmentRepository;
+    const bus: EventBus = { publish: jest.fn(async () => '1-0'), subscribe: jest.fn() };
+    const redis = { set: jest.fn(), get: jest.fn() };
+    const config = {
+      get: jest.fn(() => 604800),
+    } as unknown as ConfigService;
+    const processor = new EnrichmentProcessor(
+      repo,
+      bus,
+      redis as never,
+      config,
+      stubCounter(),
+      stubCounter(),
+      stubPinoLogger(),
+    );
+
+    const result = await processor.process({
+      id: 'j',
+      data: {
+        vesselId: vessel.id,
+        mmsi: vessel.mmsi,
+        trigger: 'stale',
+        profileHash: 'abc',
+        observedImo: null,
+        observedName: null,
+      },
+    } as unknown as Job<EnrichmentJobData>);
+
+    expect(result).toEqual({ status: 'clear', matches: 0 });
+    expect(repo.findSanctionCandidatesByName).not.toHaveBeenCalled();
+    expect(repo.applyEnrichment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vesselId: 'v-4',
+        status: 'clear',
+        matches: [],
+      }),
+    );
   });
 });

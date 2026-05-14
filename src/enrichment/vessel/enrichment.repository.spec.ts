@@ -27,9 +27,10 @@ const captured = (): {
   };
 };
 
-const fakeDbs = (exec: jest.Mock): DbService => ({
-  db: { execute: exec } as unknown as DbService['db'],
-}) as DbService;
+const fakeDbs = (exec: jest.Mock): DbService =>
+  ({
+    db: { execute: exec } as unknown as DbService['db'],
+  }) as DbService;
 
 describe('EnrichmentRepository.applyEnrichment', () => {
   const baseMatch: SanctionMatch = {
@@ -107,8 +108,8 @@ describe('EnrichmentRepository.applyEnrichment', () => {
   });
 });
 
-describe('EnrichmentRepository.loadAllSanctionCandidates', () => {
-  it('loads programs from sanctioned_entities into match candidates', async () => {
+describe('EnrichmentRepository sanctions candidate lookups', () => {
+  it('loads IMO candidates with an indexed equality filter', async () => {
     const cap = captured();
     cap.setResult([
       {
@@ -126,8 +127,12 @@ describe('EnrichmentRepository.loadAllSanctionCandidates', () => {
     ]);
     const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
 
-    const rows = await repo.loadAllSanctionCandidates();
+    const rows = await repo.findSanctionCandidatesByImo('9187629');
 
+    const q = cap.lastQuery();
+    expect(q.sql).toMatch(/FROM sanctioned_entities/i);
+    expect(q.sql).toMatch(/WHERE imo = \$/i);
+    expect(q.params).toContain('9187629');
     expect(cap.lastQuery().sql).toMatch(/programs/i);
     expect(rows[0]).toMatchObject({
       entityId: 'e1',
@@ -135,5 +140,39 @@ describe('EnrichmentRepository.loadAllSanctionCandidates', () => {
       sourceEntityId: '15036',
       programs: ['IRAN', 'NPWMD'],
     });
+  });
+
+  it('loads MMSI candidates with an indexed equality filter', async () => {
+    const cap = captured();
+    cap.setResult([]);
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+
+    await repo.findSanctionCandidatesByMmsi('572469210');
+
+    const q = cap.lastQuery();
+    expect(q.sql).toMatch(/WHERE mmsi = \$/i);
+    expect(q.params).toContain('572469210');
+  });
+
+  it('loads name fallback candidates by exact name or exact alias only', async () => {
+    const cap = captured();
+    cap.setResult([]);
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+
+    await repo.findSanctionCandidatesByName('ARTAVIL');
+
+    const q = cap.lastQuery();
+    expect(q.sql).toMatch(/WHERE name = \$\d+ OR aliases @> ARRAY\[\$\d+\]::text\[\]/i);
+    expect(q.params).toEqual(['ARTAVIL', 'ARTAVIL']);
+  });
+
+  it('does not query sanctions when name normalizes to empty', async () => {
+    const cap = captured();
+    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+
+    const rows = await repo.findSanctionCandidatesByName('   ');
+
+    expect(rows).toEqual([]);
+    expect(cap.exec).not.toHaveBeenCalled();
   });
 });
