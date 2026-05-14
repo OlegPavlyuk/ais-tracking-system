@@ -24,7 +24,7 @@
     "migrate": "drizzle-kit migrate",
     "migrate:generate": "drizzle-kit generate",
     "migrate:check": "drizzle-kit check",
-    "partition:create": "ts-node scripts/create-partition.ts",
+    "partition:maintain": "ts-node scripts/maintain-history-partitions.ts",
     "web:dev": "pnpm --dir web dev",
     "web:build": "pnpm --dir web build"
   },

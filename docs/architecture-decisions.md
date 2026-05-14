@@ -87,12 +87,25 @@ Three tables, three access patterns:
 - `vessel_positions_latest` — current state, one row per vessel, fast bbox reads.
   - `position geometry(Point, 4326)` + GIST index.
   - UPSERT target.
-- `vessel_positions_history` — append-only, monthly range partitioning.
-  - Managed manually via migration helper for MVP. No `pg_partman`.
-  - GIST index per partition.
+- `vessel_positions_history` — append-only, daily UTC range partitioning.
+  - First-party lifecycle management; no `pg_partman` for MVP.
+  - Startup-safe and scheduled maintenance create today + next 7 days and drop
+    partitions older than retention.
+  - Unique `(vessel_id, occurred_at)` index supports idempotent replay and
+    vessel/time track queries. No history GIST index until history spatial
+    queries exist.
 
-Storage writer performs `_latest` UPSERT and `_history` INSERT in a **single
-DB transaction**.
+Storage writer first applies the retained telemetry window as business policy.
+AIS position/static events older than retention are treated as expected stale
+telemetry: they increment `history_events_dropped_total{reason="too_old"}`, emit
+a structured log, and return before any DB transaction. The guard intentionally
+lives at the storage boundary, where stale history can otherwise target dropped
+daily partitions; enrichment dispatch keeps its normal lightweight lookup/job
+decision path.
+Current position events then perform vessel identity UPSERT, `_latest` UPSERT,
+and `_history` INSERT in a **single DB transaction**. The latest-position
+timestamp guard remains as a secondary replay/out-of-order protection inside
+the retained window.
 
 PostGIS column type is `geometry(Point, 4326)` (not `geography`). Justification:
 the primary use case is bbox queries within the Black Sea region; geometry is
@@ -101,7 +114,9 @@ in specific queries that need accurate distance-in-meters.
 
 Defaults (configurable):
 
-- History retention: 90 days.
+- History retention: 7 days + 1 safety day.
+- History partition precreate window: today + next 7 days.
+- History partition maintenance: startup and daily at 00:05 UTC.
 - `_latest` staleness filter: 24 hours (vessels not seen in 24h excluded from
   bbox queries; not deleted).
 

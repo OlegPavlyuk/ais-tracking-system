@@ -30,6 +30,7 @@ import {
   DB_QUERY_DURATION_SECONDS,
   DB_WRITES_TOTAL,
   ENRICHMENT_JOBS_TOTAL,
+  HISTORY_EVENTS_DROPPED_TOTAL,
   HTTP_REQUEST_DURATION_SECONDS,
   SANCTIONS_IMPORT_DURATION_SECONDS,
   SANCTIONS_IMPORT_RECORDS_TOTAL,
@@ -139,6 +140,12 @@ const dbWritesTotalProvider = makeCounterProvider({
   labelNames: ['table'] as const,
 });
 
+const historyEventsDroppedProvider = makeCounterProvider({
+  name: HISTORY_EVENTS_DROPPED_TOTAL,
+  help: 'AIS telemetry events dropped at the storage boundary before DB writes, labelled by reason.',
+  labelNames: ['reason'] as const,
+});
+
 const enrichmentJobsProvider = makeCounterProvider({
   name: ENRICHMENT_JOBS_TOTAL,
   help: 'Enrichment job outcomes, labelled by status.',
@@ -189,6 +196,7 @@ const ALL_PROVIDERS = [
   deadletterTotalProvider,
   dbQueryDurationProvider,
   dbWritesTotalProvider,
+  historyEventsDroppedProvider,
   enrichmentJobsProvider,
   sanctionsImportDurationProvider,
   sanctionsImportRecordsProvider,

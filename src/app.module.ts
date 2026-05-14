@@ -41,7 +41,7 @@ const ROLE_MODULES: Record<ProcessRole, NestImport[]> = {
   ],
   api: [ApiModule, AdminModule, RealtimeModule],
   ingestion: [IngestionModule, PipelineModule, StorageModule],
-  worker: [EnrichmentModule, StorageModule],
+  worker: [EnrichmentModule],
 };
 
 @Module({})

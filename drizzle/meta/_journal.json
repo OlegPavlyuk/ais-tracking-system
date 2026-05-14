@@ -43,6 +43,13 @@
       "when": 1777830000000,
       "tag": "0005_vessel_enrichment",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777840000000,
+      "tag": "0006_daily_history_partitions",
+      "breakpoints": true
     }
   ]
 }

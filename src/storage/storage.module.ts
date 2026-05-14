@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
-import { VesselsRepository } from './vessels.repository';
+import { StorageCoreModule } from './storage-core.module';
+import { HistoryPartitionMaintenanceService } from './history-partition-maintenance.service';
 import { StorageWriterConsumer } from './storage-writer.consumer';
 
 @Module({
-  providers: [VesselsRepository, StorageWriterConsumer],
-  exports: [VesselsRepository],
+  imports: [StorageCoreModule],
+  providers: [StorageWriterConsumer, HistoryPartitionMaintenanceService],
+  exports: [StorageCoreModule],
 })
 export class StorageModule {}

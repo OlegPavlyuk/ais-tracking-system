@@ -11,6 +11,7 @@ export const AIS_DEADLETTER_TOTAL = 'ais_deadletter_total';
 
 export const DB_QUERY_DURATION_SECONDS = 'db_query_duration_seconds';
 export const DB_WRITES_TOTAL = 'db_writes_total';
+export const HISTORY_EVENTS_DROPPED_TOTAL = 'history_events_dropped_total';
 
 export const ENRICHMENT_JOBS_TOTAL = 'enrichment_jobs_total';
 export const SANCTIONS_IMPORT_DURATION_SECONDS = 'sanctions_import_duration_seconds';

@@ -69,6 +69,31 @@ export type Vessel = typeof vessels.$inferSelect;
 export type NewVessel = typeof vessels.$inferInsert;
 export type VesselPositionLatest = typeof vesselPositionsLatest.$inferSelect;
 
+/**
+ * Logical parent table for append-only position history. The actual table is
+ * partitioned by `occurred_at`, and daily child partitions are managed by raw
+ * SQL migrations plus HistoryPartitionMaintenanceService.
+ */
+export const vesselPositionsHistory = pgTable(
+  'vessel_positions_history',
+  {
+    vesselId: uuid('vessel_id').notNull(),
+    mmsi: varchar('mmsi', { length: 9 }).notNull(),
+    position: geometry('position', { type: 'point', mode: 'xy', srid: 4326 }).notNull(),
+    sog: doublePrecision('sog'),
+    cog: doublePrecision('cog'),
+    trueHeading: smallint('true_heading'),
+    navStatus: smallint('nav_status'),
+    rateOfTurn: doublePrecision('rate_of_turn'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('vessel_positions_history_vessel_occurred_uniq').on(t.vesselId, t.occurredAt),
+  ],
+);
+
+export type VesselPositionHistory = typeof vesselPositionsHistory.$inferSelect;
+
 export const sanctionedEntities = pgTable(
   'sanctioned_entities',
   {

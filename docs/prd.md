@@ -48,7 +48,7 @@ microservice-extraction path tomorrow.
    time window, so that I can analyze its recent movements.
 7. As a maritime analyst, I want vessels appearing on sanctions lists to be
    visually flagged, so that I can spot them immediately.
-8. As a maritime analyst, I want to see *which* sanctions sources flagged a
+8. As a maritime analyst, I want to see _which_ sanctions sources flagged a
    vessel and when those sources were last refreshed, so that I can trust the
    information.
 9. As an end user, I want stale vessels (not seen recently) to be excluded from
@@ -162,7 +162,7 @@ microservice-extraction path tomorrow.
     `mmsi`/`imo` as indexed operational fields, so that MMSI reassignment over
     time does not corrupt our model.
 47. As a developer, I want the `vessel_positions_history` table partitioned
-    monthly so that retention pruning is a partition drop, not a row delete.
+    daily so that 7-day history retention is a partition drop, not a row delete.
 48. As a developer, I want the storage writer to perform `_latest` UPSERT and
     `_history` INSERT inside a single DB transaction, so that the two
     representations cannot diverge.
@@ -252,7 +252,7 @@ The PRD-relevant items:
 - `vessel_positions_latest` — vessel-keyed; `position geometry(Point, 4326)`
   with GIST index; `last_seen_at`; one row per vessel.
 - `vessel_positions_history` — append-only, `PARTITION BY RANGE (occurred_at)`
-  monthly, GIST per-partition. Manual partition management.
+  daily by UTC day. First-party partition lifecycle maintenance.
 - `sanctioned_entities` — `(source, source_entity_id)` unique; indexed `imo`,
   `mmsi`, `name`; `aliases` text[] with GIN index; raw payload JSONB.
 - `sanctions_import_runs` — audit table.

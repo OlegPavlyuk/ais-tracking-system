@@ -2,10 +2,21 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter, Histogram } from 'prom-client';
 import { sql } from 'drizzle-orm';
+import { PinoLogger } from 'nestjs-pino';
+import { ConfigService } from '../shared/config/config.service';
 import { DbService } from '../shared/db/db.service';
 import { Bbox } from '../shared/config/constants';
-import { DB_QUERY_DURATION_SECONDS, DB_WRITES_TOTAL } from '../shared/metrics/metric-names';
+import {
+  DB_QUERY_DURATION_SECONDS,
+  DB_WRITES_TOTAL,
+  HISTORY_EVENTS_DROPPED_TOTAL,
+} from '../shared/metrics/metric-names';
 import { PositionEvent, StaticEvent } from '../contracts';
+import {
+  HISTORY_RETENTION_SAFETY_DAYS,
+  historyRetentionCutoffDay,
+  isHistoryEventRetained,
+} from './history-partitions';
 
 export interface VesselSnapshotRow {
   id: string;
@@ -83,11 +94,17 @@ export interface VesselDetailRow {
 export class VesselsRepository {
   constructor(
     @Inject(DbService) private readonly dbs: DbService,
+    @Inject(ConfigService) private readonly config: ConfigService,
     @InjectMetric(DB_QUERY_DURATION_SECONDS)
     private readonly queryDuration: Histogram<'query'>,
     @InjectMetric(DB_WRITES_TOTAL)
     private readonly writes: Counter<'table'>,
-  ) {}
+    @InjectMetric(HISTORY_EVENTS_DROPPED_TOTAL)
+    private readonly historyDropped: Counter<'reason'>,
+    private readonly pino: PinoLogger,
+  ) {
+    this.pino.setContext(VesselsRepository.name);
+  }
 
   private async timed<T>(query: string, fn: () => Promise<T>): Promise<T> {
     const end = this.queryDuration.startTimer({ query });
@@ -102,12 +119,16 @@ export class VesselsRepository {
    * Single transaction: upsert `vessels` (creating on first sight), upsert
    * `vessel_positions_latest`, append to `vessel_positions_history`. The
    * history insert is guarded by `(vessel_id, occurred_at)` uniqueness so a
-   * stream replay is a no-op rather than a duplicate row.
+   * stream replay is a no-op rather than a duplicate row. Stale telemetry is
+   * filtered before the transaction so dropped events perform no DB writes.
    */
   async upsertPosition(event: PositionEvent): Promise<void> {
     const db = this.dbs.db;
-    await this.timed('vessels.upsertPosition', () => db.transaction(async (tx) => {
-      const inserted = await tx.execute(sql`
+    if (this.dropIfStaleTelemetry(event)) return;
+
+    await this.timed('vessels.upsertPosition', () =>
+      db.transaction(async (tx) => {
+        const inserted = await tx.execute(sql`
         INSERT INTO vessels (mmsi, name, updated_at)
         VALUES (${event.mmsi}, ${event.shipName ?? null}, NOW())
         ON CONFLICT (mmsi) DO UPDATE
@@ -115,10 +136,10 @@ export class VesselsRepository {
               updated_at = NOW()
         RETURNING id
       `);
-      const row = (inserted as unknown as Array<{ id: string }>)[0];
-      if (!row) throw new Error(`vessels upsert returned no row for mmsi=${event.mmsi}`);
+        const row = (inserted as unknown as Array<{ id: string }>)[0];
+        if (!row) throw new Error(`vessels upsert returned no row for mmsi=${event.mmsi}`);
 
-      await tx.execute(sql`
+        await tx.execute(sql`
         INSERT INTO vessel_positions_latest (
           vessel_id, mmsi, position, sog, cog, true_heading, nav_status, rate_of_turn, occurred_at, last_seen_at
         )
@@ -146,24 +167,25 @@ export class VesselsRepository {
           WHERE vessel_positions_latest.occurred_at <= EXCLUDED.occurred_at
       `);
 
-      await tx.execute(sql`
-        INSERT INTO vessel_positions_history (
-          vessel_id, mmsi, position, sog, cog, true_heading, nav_status, rate_of_turn, occurred_at
-        )
-        VALUES (
-          ${row.id},
-          ${event.mmsi},
-          ST_SetSRID(ST_MakePoint(${event.lon}, ${event.lat}), 4326),
-          ${event.sog ?? null},
-          ${event.cog ?? null},
-          ${event.trueHeading ?? null},
-          ${event.navStatus ?? null},
-          ${event.rateOfTurn ?? null},
-          ${event.occurredAt}
-        )
-        ON CONFLICT (vessel_id, occurred_at) DO NOTHING
-      `);
-    }));
+        await tx.execute(sql`
+          INSERT INTO vessel_positions_history (
+            vessel_id, mmsi, position, sog, cog, true_heading, nav_status, rate_of_turn, occurred_at
+          )
+          VALUES (
+            ${row.id},
+            ${event.mmsi},
+            ST_SetSRID(ST_MakePoint(${event.lon}, ${event.lat}), 4326),
+            ${event.sog ?? null},
+            ${event.cog ?? null},
+            ${event.trueHeading ?? null},
+            ${event.navStatus ?? null},
+            ${event.rateOfTurn ?? null},
+            ${event.occurredAt}
+          )
+          ON CONFLICT (vessel_id, occurred_at) DO NOTHING
+        `);
+      }),
+    );
     this.writes.inc({ table: 'vessels' });
     this.writes.inc({ table: 'vessel_positions_latest' });
     this.writes.inc({ table: 'vessel_positions_history' });
@@ -175,7 +197,9 @@ export class VesselsRepository {
     to: Date,
     simplifyMeters?: number,
   ): Promise<TrackResult> {
-    return this.timed('vessels.findTrack', () => this.findTrackInner(vesselId, from, to, simplifyMeters));
+    return this.timed('vessels.findTrack', () =>
+      this.findTrackInner(vesselId, from, to, simplifyMeters),
+    );
   }
 
   private async findTrackInner(
@@ -207,7 +231,9 @@ export class VesselsRepository {
       }
       try {
         const geom = JSON.parse(row.geojson) as { coordinates?: unknown };
-        const coords = Array.isArray(geom.coordinates) ? (geom.coordinates as [number, number][]) : [];
+        const coords = Array.isArray(geom.coordinates)
+          ? (geom.coordinates as [number, number][])
+          : [];
         return { kind: 'linestring', coordinates: coords };
       } catch {
         return { kind: 'linestring', coordinates: [] };
@@ -231,7 +257,8 @@ export class VesselsRepository {
     const points = (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
       lon: r.lon as number,
       lat: r.lat as number,
-      occurredAt: (r.occurredAt instanceof Date ? r.occurredAt.toISOString() : (r.occurredAt as string)),
+      occurredAt:
+        r.occurredAt instanceof Date ? r.occurredAt.toISOString() : (r.occurredAt as string),
       sog: r.sog as number | null,
       cog: r.cog as number | null,
       navStatus: r.navStatus as number | null,
@@ -246,7 +273,10 @@ export class VesselsRepository {
    * IMO/dimensions previously learned from a Type 5.
    */
   async upsertProfile(event: StaticEvent): Promise<void> {
-    await this.timed('vessels.upsertProfile', () => this.dbs.db.execute(sql`
+    if (this.dropIfStaleTelemetry(event)) return;
+
+    await this.timed('vessels.upsertProfile', () =>
+      this.dbs.db.execute(sql`
       INSERT INTO vessels (
         mmsi, imo, name, call_sign, ship_type, destination,
         dimension_to_bow, dimension_to_stern, dimension_to_port, dimension_to_starboard,
@@ -276,8 +306,32 @@ export class VesselsRepository {
             dimension_to_port      = COALESCE(EXCLUDED.dimension_to_port,      vessels.dimension_to_port),
             dimension_to_starboard = COALESCE(EXCLUDED.dimension_to_starboard, vessels.dimension_to_starboard),
             updated_at             = NOW()
-    `));
+    `),
+    );
     this.writes.inc({ table: 'vessels' });
+  }
+
+  private dropIfStaleTelemetry(event: PositionEvent | StaticEvent): boolean {
+    const now = new Date();
+    const retentionPolicy = {
+      retentionDays: this.config.get('HISTORY_RETENTION_DAYS'),
+      safetyDays: HISTORY_RETENTION_SAFETY_DAYS,
+    };
+    if (isHistoryEventRetained(event.occurredAt, now, retentionPolicy)) return false;
+
+    this.historyDropped.inc({ reason: 'too_old' });
+    this.pino.warn(
+      {
+        mmsi: event.mmsi,
+        occurredAt: event.occurredAt,
+        retentionCutoff: historyRetentionCutoffDay(now, retentionPolicy).toISOString(),
+        traceId: event.traceId,
+        kind: event.kind,
+        reason: 'too_old',
+      },
+      'dropped stale telemetry outside retention window',
+    );
+    return true;
   }
 
   /** Latest snapshot in supported coverage, joined to profile, filtered by `last_seen_at`. */
@@ -288,9 +342,11 @@ export class VesselsRepository {
   ): Promise<VesselSnapshotRow[]> {
     if (bboxes.length === 0) return [];
     const since = new Date(Date.now() - sinceMs).toISOString();
-    const bboxConditions = bboxes.map((bbox) => sql`
+    const bboxConditions = bboxes.map(
+      (bbox) => sql`
       p.position && ST_MakeEnvelope(${bbox.minLon}, ${bbox.minLat}, ${bbox.maxLon}, ${bbox.maxLat}, 4326)
-    `);
+    `,
+    );
 
     return this.timed('vessels.findLatestInBboxes', async () => {
       const rows = await this.dbs.db.execute(sql`
