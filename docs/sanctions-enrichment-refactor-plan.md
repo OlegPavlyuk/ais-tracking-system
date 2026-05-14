@@ -32,23 +32,23 @@ Current status:
 - [x] Phase 1 — Remove stale import script
 - [x] Phase 2 — Bootstrap sanctions import lifecycle
 - [x] Phase 3 — Targeted sanctions lookup for enrichment
-- [ ] Phase 4 — Raw SQL to Drizzle cleanup where appropriate
+- [x] Phase 4 — Raw SQL to Drizzle cleanup where appropriate
 - [ ] Optional later phase — Import freshness / status visibility
 
 Current phase:
 
-- Phase 3 is complete. Vessel enrichment now uses targeted sanctions candidate
-  lookups by IMO, MMSI, and exact name/alias fallback instead of loading every
-  sanctioned entity for each job.
+- Phase 4 is complete. Routine sanctions/enrichment repository reads and simple
+  import-run writes now use Drizzle query builder where it improves type
+  clarity, while specialized raw SQL remains in place for advisory locks,
+  array/json-heavy upserts, and guarded update row-count behavior.
 
 What should be done next:
 
-- After Phase 3 is reviewed and committed, begin Phase 4: raw SQL to Drizzle
-  cleanup where appropriate.
-- Keep Phase 4 scoped to routine sanctions/enrichment CRUD cleanup. Leave raw
-  SQL in place where it remains clearer or technically appropriate, such as
-  advisory locks, PostGIS, partition DDL, complex bulk operations, and complex
-  JSON/array operations.
+- After Phase 4 is reviewed and committed, consider the optional later phase:
+  import freshness / status visibility.
+- Keep the optional phase scoped to operator visibility. Do not redesign import
+  scheduling, matching semantics, schemas, or queue architecture without a new
+  explicit plan.
 
 Relevant files by phase:
 
@@ -109,6 +109,11 @@ Important notes discovered so far:
   `aliases` array containment, then keeps existing matcher normalization over
   that narrow candidate set. No alias schema redesign, fuzzy matching,
   migrations, or normalized name columns were added.
+- Phase 4 converted simple import-run, vessel fingerprint, and sanctions
+  candidate lookup queries to Drizzle. Raw SQL remains intentionally retained
+  for source advisory locks, sanctions entity upsert array/json handling, and
+  the enrichment freshness-guarded update because those cases are clearer or
+  rely on result metadata.
 - If clarification is needed during any phase, ask before implementing silent
   assumptions.
 
@@ -659,9 +664,31 @@ it remains the better tool.
 
 ### Implementation Notes
 
-- Capture important discoveries, rejected alternatives, edge cases,
-  operational caveats, or architectural findings here during implementation.
-- Record which raw SQL was intentionally retained and why.
+- Converted `SanctionsRepository.startRun()`, `finishRun()`,
+  `findRecentRuns()`, `findLastRunBySource()`, and
+  `hasSuccessfulRunBySource()` to Drizzle query builder.
+- Added a shared `mapImportRun()` helper for sanctions import run rows so
+  date-to-ISO and JSON error mapping are centralized instead of repeated across
+  recent/latest queries.
+- Converted `EnrichmentRepository.findVesselFingerprintByMmsi()` and targeted
+  sanctions candidate lookups to Drizzle query builder.
+- Kept the Phase 3 name fallback semantics unchanged: exact `name` equality or
+  exact `aliases @> ARRAY[...]::text[]` containment only.
+- Raw SQL intentionally retained:
+  - `SanctionsRepository.withSourceImportLock()` because the reserved
+    `postgres.js` connection and advisory lock acquire/release pairing are the
+    important behavior.
+  - `SanctionsRepository.upsertEntities()` because the current batch loop uses
+    JSON-to-text-array conversion and JSONB payload writes that are clearer in
+    SQL for now.
+  - `EnrichmentRepository.applyEnrichment()` because the freshness guard and
+    `rowCount`/result metadata handling are easier to reason about as raw SQL.
+- Tests now cover Drizzle-backed mapping for import runs, vessel fingerprints,
+  sanctions candidate null/date handling, and existing advisory lock behavior.
+- Checks run:
+  - `pnpm test -- src/enrichment`
+  - `pnpm typecheck`
+  - `pnpm lint`
 
 ## Optional Later Phase: Import Freshness / Status Visibility
 

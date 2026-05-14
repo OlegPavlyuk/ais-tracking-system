@@ -27,9 +27,9 @@ const captured = (): {
   };
 };
 
-const fakeDbs = (exec: jest.Mock): DbService =>
+const fakeDbs = (exec: jest.Mock, select?: jest.Mock): DbService =>
   ({
-    db: { execute: exec } as unknown as DbService['db'],
+    db: { execute: exec, ...(select ? { select } : {}) } as unknown as DbService['db'],
   }) as DbService;
 
 describe('EnrichmentRepository.applyEnrichment', () => {
@@ -109,9 +109,50 @@ describe('EnrichmentRepository.applyEnrichment', () => {
 });
 
 describe('EnrichmentRepository sanctions candidate lookups', () => {
-  it('loads IMO candidates with an indexed equality filter', async () => {
-    const cap = captured();
-    cap.setResult([
+  it('loads vessel fingerprints through a targeted Drizzle path', async () => {
+    const chain = makeSelectChain([
+      {
+        id: 'v-1',
+        mmsi: '572469210',
+        imo: '9187629',
+        name: 'ARTAVIL',
+      },
+    ]);
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
+
+    await expect(repo.findVesselFingerprintByMmsi('572469210')).resolves.toEqual({
+      id: 'v-1',
+      mmsi: '572469210',
+      imo: '9187629',
+      name: 'ARTAVIL',
+    });
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(1);
+  });
+
+  it('returns null when no vessel fingerprint exists', async () => {
+    const chain = makeSelectChain([]);
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
+
+    await expect(repo.findVesselFingerprintByMmsi('572469210')).resolves.toBeNull();
+
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(1);
+  });
+
+  it('loads IMO candidates through a targeted Drizzle path', async () => {
+    const chain = makeSelectChain([
       {
         id: 'e1',
         source: 'ofac',
@@ -125,15 +166,17 @@ describe('EnrichmentRepository sanctions candidate lookups', () => {
         programs: ['IRAN', 'NPWMD'],
       },
     ]);
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
 
     const rows = await repo.findSanctionCandidatesByImo('9187629');
 
-    const q = cap.lastQuery();
-    expect(q.sql).toMatch(/FROM sanctioned_entities/i);
-    expect(q.sql).toMatch(/WHERE imo = \$/i);
-    expect(q.params).toContain('9187629');
-    expect(cap.lastQuery().sql).toMatch(/programs/i);
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
     expect(rows[0]).toMatchObject({
       entityId: 'e1',
       source: 'ofac',
@@ -142,37 +185,108 @@ describe('EnrichmentRepository sanctions candidate lookups', () => {
     });
   });
 
-  it('loads MMSI candidates with an indexed equality filter', async () => {
-    const cap = captured();
-    cap.setResult([]);
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+  it('maps date objects in candidate rows to ISO dates', async () => {
+    const chain = makeSelectChain([
+      {
+        id: 'e1',
+        source: 'ofac',
+        sourceEntityId: '15036',
+        name: 'ARTAVIL',
+        imo: '9187629',
+        mmsi: null,
+        aliases: ['ABADAN'],
+        flag: 'Iran',
+        listingDate: new Date('2020-01-15T00:00:00.000Z'),
+        programs: ['IRAN', 'NPWMD'],
+      },
+    ]);
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
+
+    const rows = await repo.findSanctionCandidatesByImo('9187629');
+
+    expect(rows[0]?.listingDate).toBe('2020-01-15');
+  });
+
+  it('loads MMSI candidates through a targeted Drizzle path', async () => {
+    const chain = makeSelectChain([]);
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
 
     await repo.findSanctionCandidatesByMmsi('572469210');
 
-    const q = cap.lastQuery();
-    expect(q.sql).toMatch(/WHERE mmsi = \$/i);
-    expect(q.params).toContain('572469210');
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
   });
 
-  it('loads name fallback candidates by exact name or exact alias only', async () => {
-    const cap = captured();
-    cap.setResult([]);
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+  it('loads name fallback candidates through a targeted Drizzle path', async () => {
+    const chain = makeSelectChain([]);
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
 
     await repo.findSanctionCandidatesByName('ARTAVIL');
 
-    const q = cap.lastQuery();
-    expect(q.sql).toMatch(/WHERE name = \$\d+ OR aliases @> ARRAY\[\$\d+\]::text\[\]/i);
-    expect(q.params).toEqual(['ARTAVIL', 'ARTAVIL']);
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns an empty array when name fallback has no DB rows', async () => {
+    const chain = makeSelectChain([]);
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
+
+    await expect(repo.findSanctionCandidatesByName('ARTAVIL')).resolves.toEqual([]);
+
+    expect(chain.where).toHaveBeenCalledTimes(1);
   });
 
   it('does not query sanctions when name normalizes to empty', async () => {
-    const cap = captured();
-    const repo = new EnrichmentRepository(fakeDbs(cap.exec), stubHistogram(), stubCounter());
+    const select = jest.fn();
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
 
     const rows = await repo.findSanctionCandidatesByName('   ');
 
     expect(rows).toEqual([]);
-    expect(cap.exec).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
   });
 });
+
+interface SelectChain<T> extends PromiseLike<T[]> {
+  from: jest.Mock<SelectChain<T>>;
+  where: jest.Mock<SelectChain<T>>;
+  limit: jest.Mock<Promise<T[]>>;
+  catch: Promise<T[]>['catch'];
+  finally: Promise<T[]>['finally'];
+}
+
+function makeSelectChain<T>(result: T[]): SelectChain<T> {
+  const promise = Promise.resolve(result);
+  const chain = {} as SelectChain<T>;
+  chain.from = jest.fn(() => chain);
+  chain.where = jest.fn(() => chain);
+  chain.limit = jest.fn(() => promise);
+  chain.then = promise.then.bind(promise);
+  chain.catch = promise.catch.bind(promise);
+  chain.finally = promise.finally.bind(promise);
+  return chain;
+}

@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter, Histogram } from 'prom-client';
-import { sql } from 'drizzle-orm';
+import { eq, or, sql, type SQL } from 'drizzle-orm';
 import { DbService } from '../../shared/db/db.service';
 import { DB_QUERY_DURATION_SECONDS, DB_WRITES_TOTAL } from '../../shared/metrics/metric-names';
+import { sanctionedEntities, vessels } from '../../storage/schema';
 import { normalizeName, SanctionCandidate, SanctionMatch, SanctionsStatus } from './matcher';
 
 export interface VesselFingerprint {
@@ -41,75 +42,92 @@ export class EnrichmentRepository {
   }
 
   async findVesselFingerprintByMmsi(mmsi: string): Promise<VesselFingerprint | null> {
-    const rows = await this.dbs.db.execute(sql`
-      SELECT id, mmsi, imo, name
-      FROM vessels
-      WHERE mmsi = ${mmsi}
-      LIMIT 1
-    `);
-    const row = (rows as unknown as Array<Record<string, unknown>>)[0];
+    const rows = await this.dbs.db
+      .select({
+        id: vessels.id,
+        mmsi: vessels.mmsi,
+        imo: vessels.imo,
+        name: vessels.name,
+      })
+      .from(vessels)
+      .where(eq(vessels.mmsi, mmsi))
+      .limit(1);
+    const row = rows[0];
     if (!row) return null;
     return {
-      id: row.id as string,
-      mmsi: row.mmsi as string,
-      imo: (row.imo as string | null) ?? null,
-      name: (row.name as string | null) ?? null,
+      id: row.id,
+      mmsi: row.mmsi,
+      imo: row.imo,
+      name: row.name,
     };
   }
 
   async findSanctionCandidatesByImo(imo: string): Promise<SanctionCandidate[]> {
     return this.timed('enrichment.findSanctionCandidatesByImo', () =>
-      this.loadSanctionCandidates(sql`imo = ${imo}`),
+      this.loadSanctionCandidates(eq(sanctionedEntities.imo, imo)),
     );
   }
 
   async findSanctionCandidatesByMmsi(mmsi: string): Promise<SanctionCandidate[]> {
     return this.timed('enrichment.findSanctionCandidatesByMmsi', () =>
-      this.loadSanctionCandidates(sql`mmsi = ${mmsi}`),
+      this.loadSanctionCandidates(eq(sanctionedEntities.mmsi, mmsi)),
     );
   }
 
   async findSanctionCandidatesByName(name: string | null): Promise<SanctionCandidate[]> {
     if (normalizeName(name).length === 0) return [];
+    const candidateName = name ?? '';
     return this.timed('enrichment.findSanctionCandidatesByName', () =>
-      this.loadSanctionCandidates(sql`name = ${name} OR aliases @> ARRAY[${name}]::text[]`),
+      this.loadSanctionCandidates(
+        or(
+          eq(sanctionedEntities.name, candidateName),
+          sql`${sanctionedEntities.aliases} @> ARRAY[${candidateName}]::text[]`,
+        ),
+      ),
     );
   }
 
-  private async loadSanctionCandidates(
-    where: ReturnType<typeof sql>,
-  ): Promise<SanctionCandidate[]> {
-    const rows = await this.dbs.db.execute(sql`
-      SELECT
-        id,
-        source,
-        source_entity_id AS "sourceEntityId",
-        name,
-        imo,
-        mmsi,
-        aliases,
-        flag,
-        listing_date AS "listingDate",
-        programs
-      FROM sanctioned_entities
-      WHERE ${where}
-    `);
-    return (rows as unknown as Array<Record<string, unknown>>).map((r) =>
-      this.mapSanctionCandidate(r),
-    );
+  private async loadSanctionCandidates(where: SQL | undefined): Promise<SanctionCandidate[]> {
+    const rows = await this.dbs.db
+      .select({
+        id: sanctionedEntities.id,
+        source: sanctionedEntities.source,
+        sourceEntityId: sanctionedEntities.sourceEntityId,
+        name: sanctionedEntities.name,
+        imo: sanctionedEntities.imo,
+        mmsi: sanctionedEntities.mmsi,
+        aliases: sanctionedEntities.aliases,
+        flag: sanctionedEntities.flag,
+        listingDate: sanctionedEntities.listingDate,
+        programs: sanctionedEntities.programs,
+      })
+      .from(sanctionedEntities)
+      .where(where);
+    return rows.map((r) => this.mapSanctionCandidate(r));
   }
 
-  private mapSanctionCandidate(r: Record<string, unknown>): SanctionCandidate {
+  private mapSanctionCandidate(r: {
+    id: string;
+    source: string;
+    sourceEntityId: string;
+    name: string;
+    imo: string | null;
+    mmsi: string | null;
+    aliases: string[];
+    flag: string | null;
+    listingDate: string | Date | null;
+    programs: string[];
+  }): SanctionCandidate {
     return {
-      entityId: r.id as string,
-      source: r.source as string,
-      sourceEntityId: r.sourceEntityId as string,
-      name: r.name as string,
-      imo: (r.imo as string | null) ?? null,
-      mmsi: (r.mmsi as string | null) ?? null,
-      aliases: (r.aliases as string[] | null) ?? [],
-      flag: (r.flag as string | null) ?? null,
-      programs: (r.programs as string[] | null) ?? [],
+      entityId: r.id,
+      source: r.source,
+      sourceEntityId: r.sourceEntityId,
+      name: r.name,
+      imo: r.imo,
+      mmsi: r.mmsi,
+      aliases: r.aliases,
+      flag: r.flag,
+      programs: r.programs,
       listingDate:
         r.listingDate === null || r.listingDate === undefined
           ? null

@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter } from 'prom-client';
-import { sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { DbService } from '../../shared/db/db.service';
 import { DB_WRITES_TOTAL } from '../../shared/metrics/metric-names';
+import { sanctionsImportRuns } from '../../storage/schema';
 import { VesselEntity } from './sanctions-source.adapter';
 
 const SANCTIONS_IMPORT_ADVISORY_LOCK_NAMESPACE = 1_934_910_515;
@@ -31,12 +32,11 @@ export class SanctionsRepository {
   ) {}
 
   async startRun(source: string): Promise<number> {
-    const rows = await this.dbs.db.execute(sql`
-      INSERT INTO sanctions_import_runs (source, status)
-      VALUES (${source}, 'running')
-      RETURNING id
-    `);
-    const row = (rows as unknown as Array<{ id: number | string }>)[0];
+    const rows = await this.dbs.db
+      .insert(sanctionsImportRuns)
+      .values({ source, status: 'running' })
+      .returning({ id: sanctionsImportRuns.id });
+    const row = rows[0];
     if (!row) throw new Error('failed to insert sanctions_import_runs row');
     return Number(row.id);
   }
@@ -52,9 +52,7 @@ export class SanctionsRepository {
           hashtext(${source})
         ) AS acquired
       `;
-      const acquired = Boolean(
-        (lockRows as unknown as Array<{ acquired: boolean }>)[0]?.acquired,
-      );
+      const acquired = Boolean((lockRows as unknown as Array<{ acquired: boolean }>)[0]?.acquired);
       if (!acquired) return { acquired: false };
       try {
         return { acquired: true, result: await callback() };
@@ -75,14 +73,15 @@ export class SanctionsRepository {
     recordsImported: number,
     errors: unknown[],
   ): Promise<void> {
-    await this.dbs.db.execute(sql`
-      UPDATE sanctions_import_runs
-        SET finished_at = NOW(),
-            status = ${status},
-            records_imported = ${recordsImported},
-            errors = ${JSON.stringify(errors)}::jsonb
-      WHERE id = ${runId}
-    `);
+    await this.dbs.db
+      .update(sanctionsImportRuns)
+      .set({
+        finishedAt: sql`NOW()`,
+        status,
+        recordsImported,
+        errors,
+      })
+      .where(eq(sanctionsImportRuns.id, runId));
   }
 
   async upsertEntities(source: string, batch: VesselEntity[]): Promise<void> {
@@ -122,70 +121,47 @@ export class SanctionsRepository {
   }
 
   async findRecentRuns(limit: number): Promise<SanctionsImportRunRow[]> {
-    const rows = await this.dbs.db.execute(sql`
-      SELECT
-        id,
-        source,
-        started_at      AS "startedAt",
-        finished_at     AS "finishedAt",
-        status,
-        records_imported AS "recordsImported",
-        errors
-      FROM sanctions_import_runs
-      ORDER BY started_at DESC
-      LIMIT ${limit}
-    `);
-    const toIso = (v: unknown): string =>
-      v instanceof Date ? v.toISOString() : new Date(v as string).toISOString();
-    return (rows as unknown as Array<Record<string, unknown>>).map((row) => ({
-      id: Number(row.id),
-      source: row.source as string,
-      startedAt: toIso(row.startedAt),
-      finishedAt: row.finishedAt === null ? null : toIso(row.finishedAt),
-      status: row.status as string,
-      recordsImported: Number(row.recordsImported),
-      errors: (row.errors as unknown[]) ?? [],
-    }));
+    const rows = await this.dbs.db
+      .select()
+      .from(sanctionsImportRuns)
+      .orderBy(desc(sanctionsImportRuns.startedAt))
+      .limit(limit);
+    return rows.map((row) => this.mapImportRun(row));
   }
 
   async findLastRunBySource(source: string): Promise<SanctionsImportRunRow | null> {
-    const rows = await this.dbs.db.execute(sql`
-      SELECT
-        id,
-        source,
-        started_at      AS "startedAt",
-        finished_at     AS "finishedAt",
-        status,
-        records_imported AS "recordsImported",
-        errors
-      FROM sanctions_import_runs
-      WHERE source = ${source}
-      ORDER BY started_at DESC
-      LIMIT 1
-    `);
-    const row = (rows as unknown as Array<Record<string, unknown>>)[0];
-    if (!row) return null;
-    const toIso = (v: unknown): string =>
-      v instanceof Date ? v.toISOString() : new Date(v as string).toISOString();
-    return {
-      id: Number(row.id),
-      source: row.source as string,
-      startedAt: toIso(row.startedAt),
-      finishedAt: row.finishedAt === null ? null : toIso(row.finishedAt),
-      status: row.status as string,
-      recordsImported: Number(row.recordsImported),
-      errors: (row.errors as unknown[]) ?? [],
-    };
+    const rows = await this.dbs.db
+      .select()
+      .from(sanctionsImportRuns)
+      .where(eq(sanctionsImportRuns.source, source))
+      .orderBy(desc(sanctionsImportRuns.startedAt))
+      .limit(1);
+    const row = rows[0];
+    return row ? this.mapImportRun(row) : null;
   }
 
   async hasSuccessfulRunBySource(source: string): Promise<boolean> {
-    const rows = await this.dbs.db.execute(sql`
-      SELECT 1
-      FROM sanctions_import_runs
-      WHERE source = ${source}
-        AND status = 'completed'
-      LIMIT 1
-    `);
-    return (rows as unknown[]).length > 0;
+    const rows = await this.dbs.db
+      .select({ id: sanctionsImportRuns.id })
+      .from(sanctionsImportRuns)
+      .where(
+        and(eq(sanctionsImportRuns.source, source), eq(sanctionsImportRuns.status, 'completed')),
+      )
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  private mapImportRun(row: typeof sanctionsImportRuns.$inferSelect): SanctionsImportRunRow {
+    const toIso = (v: Date | string): string =>
+      v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+    return {
+      id: Number(row.id),
+      source: row.source,
+      startedAt: toIso(row.startedAt),
+      finishedAt: row.finishedAt === null ? null : toIso(row.finishedAt),
+      status: row.status,
+      recordsImported: Number(row.recordsImported),
+      errors: (row.errors as unknown[]) ?? [],
+    };
   }
 }
