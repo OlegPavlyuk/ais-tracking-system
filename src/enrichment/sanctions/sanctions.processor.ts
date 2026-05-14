@@ -5,11 +5,12 @@ import { ConfigService } from '../../shared/config/config.service';
 import { OfacAdapter } from './ofac.adapter';
 import { SanctionsImporterService } from './sanctions-importer.service';
 import { SanctionsSourceAdapter } from './sanctions-source.adapter';
+import { SanctionsSourceId } from './source-registry';
 
 export const SANCTIONS_IMPORT_QUEUE = 'sanctions.import';
 
 export interface SanctionsImportJobData {
-  source: 'ofac';
+  source: SanctionsSourceId;
 }
 
 @Processor(SANCTIONS_IMPORT_QUEUE)

@@ -1,5 +1,7 @@
+export type SanctionsSourceId = 'ofac';
+
 export interface SanctionsSourceMeta {
-  id: string;
+  id: SanctionsSourceId;
   name: string;
   url: string;
   license: string;

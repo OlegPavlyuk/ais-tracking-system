@@ -27,6 +27,15 @@ export class DbService implements OnModuleDestroy {
     }
   }
 
+  async withReservedConnection<T>(callback: (connection: Sql) => Promise<T>): Promise<T> {
+    const connection = await this.client.reserve();
+    try {
+      return await callback(connection);
+    } finally {
+      connection.release();
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.client.end({ timeout: 5 });
   }

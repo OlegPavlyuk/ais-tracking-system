@@ -30,22 +30,23 @@ Current status:
 
 - [x] Phase 0 — Documentation / plan file creation
 - [x] Phase 1 — Remove stale import script
-- [ ] Phase 2 — Bootstrap sanctions import lifecycle
+- [x] Phase 2 — Bootstrap sanctions import lifecycle
 - [ ] Phase 3 — Targeted sanctions lookup for enrichment
 - [ ] Phase 4 — Raw SQL to Drizzle cleanup where appropriate
 - [ ] Optional later phase — Import freshness / status visibility
 
 Current phase:
 
-- Phase 1 is complete. The stale standalone sanctions import script has been
-  removed.
+- Phase 2 is complete. Worker/all startup now enqueues a bootstrap sanctions
+  import when no successful import exists for the source.
 
 What should be done next:
 
-- After Phase 1 is reviewed and committed, begin Phase 2: bootstrap sanctions
-  import lifecycle.
-- Phase 2 is the first substantive implementation priority. Keep it scoped to
-  worker/all startup bootstrap enqueueing and duplicate execution safety.
+- After Phase 2 is reviewed and committed, begin Phase 3: targeted sanctions
+  lookup for enrichment.
+- Keep Phase 3 scoped to replacing full-table candidate scans during vessel
+  enrichment. Do not add alias schema redesign, fuzzy matching, migrations, or
+  Drizzle cleanup in that phase.
 
 Relevant files by phase:
 
@@ -92,6 +93,12 @@ Important notes discovered so far:
   to `worker` and `all` roles because `api` does not import `EnrichmentModule`.
 - Do not add import freshness/status endpoint work during Phase 2.
 - Drizzle cleanup should remain separate from the bootstrap lifecycle work.
+- Bootstrap jobs use deterministic BullMQ job IDs with completed/failed job
+  removal so retained terminal jobs do not permanently block future bootstrap
+  enqueue attempts.
+- Import execution uses a source-scoped Postgres session advisory lock acquired
+  and released on the same reserved `postgres.js` connection: namespace key
+  `1934910515`, source key `hashtext(source)`.
 - If clarification is needed during any phase, ask before implementing silent
   assumptions.
 
@@ -389,10 +396,42 @@ enqueue, and bootstrap catch-up become separate but coordinated use cases.
 
 ### Implementation Notes
 
-- Capture important discoveries, rejected alternatives, edge cases,
-  operational caveats, or architectural findings here during implementation.
-- Record the final duplicate/race protection behavior here, especially any
-  advisory lock keying and BullMQ deterministic job ID retention decisions.
+- Added `SanctionsImportLifecycleService` inside `SanctionsModule`, so the
+  bootstrap lifecycle runs through the enrichment worker module path used by
+  `worker` and `all` roles. API-only role composition still does not import
+  `EnrichmentModule`.
+- The lifecycle service checks `hasSuccessfulRunBySource(source)` for each
+  configured sanctions source and enqueues a bootstrap job only when no
+  successful import run exists.
+- Bootstrap enqueueing is fire-and-forget and best-effort:
+  repository/queue failures are logged with source context and do not block or
+  throw from application bootstrap.
+- `SanctionsImportCommandService` now has explicit `requestManualRun()` and
+  `requestBootstrapRun()` methods. Existing `requestRun()` remains as a manual
+  import compatibility alias so admin behavior is preserved.
+- Bootstrap jobs use deterministic IDs in the form
+  `sanctions.import:<source>:bootstrap`. They set `removeOnComplete: true` and
+  `removeOnFail: true` so the deterministic ID dedupes queued/active bootstrap
+  jobs without retained terminal jobs permanently blocking later startup
+  attempts.
+- Import execution now calls `SanctionsRepository.withSourceImportLock()`.
+  The repository uses `pg_try_advisory_lock(1934910515, hashtext(source))` on a
+  reserved `postgres.js` connection, releases with `pg_advisory_unlock(...)` in
+  `finally`, and skips the import when another process holds the source lock.
+- The advisory lock is a distributed mutex only. The OFAC import is not wrapped
+  in one long-running database transaction; it keeps the existing ETL flow of
+  `startRun`, independent batch upserts, and `finishRun`.
+- `SanctionsImporterService` closes the import duration timer in `finally`.
+  If marking a failed import run as failed also fails, that secondary failure is
+  logged and the original import error is rethrown for BullMQ retry handling.
+- Review follow-up simplified the lifecycle bootstrap flow to start one
+  fire-and-forget bootstrap check per configured source while keeping
+  per-source error handling inside `bootstrapSource()`.
+- No admin/status freshness endpoint was added.
+- Checks run:
+  - `pnpm test -- src/enrichment/sanctions`
+  - `pnpm typecheck`
+  - `pnpm lint`
 
 ## Phase 3: Targeted Sanctions Lookup for Enrichment
 

@@ -6,6 +6,8 @@ import { DbService } from '../../shared/db/db.service';
 import { DB_WRITES_TOTAL } from '../../shared/metrics/metric-names';
 import { VesselEntity } from './sanctions-source.adapter';
 
+const SANCTIONS_IMPORT_ADVISORY_LOCK_NAMESPACE = 1_934_910_515;
+
 export interface SanctionsImportRunRow {
   id: number;
   source: string;
@@ -15,6 +17,10 @@ export interface SanctionsImportRunRow {
   recordsImported: number;
   errors: unknown[];
 }
+
+export type AdvisoryLockResult<T> =
+  | { acquired: false; result?: never }
+  | { acquired: true; result: T };
 
 @Injectable()
 export class SanctionsRepository {
@@ -33,6 +39,34 @@ export class SanctionsRepository {
     const row = (rows as unknown as Array<{ id: number | string }>)[0];
     if (!row) throw new Error('failed to insert sanctions_import_runs row');
     return Number(row.id);
+  }
+
+  async withSourceImportLock<T>(
+    source: string,
+    callback: () => Promise<T>,
+  ): Promise<AdvisoryLockResult<T>> {
+    return this.dbs.withReservedConnection(async (connection) => {
+      const lockRows = await connection`
+        SELECT pg_try_advisory_lock(
+          ${SANCTIONS_IMPORT_ADVISORY_LOCK_NAMESPACE},
+          hashtext(${source})
+        ) AS acquired
+      `;
+      const acquired = Boolean(
+        (lockRows as unknown as Array<{ acquired: boolean }>)[0]?.acquired,
+      );
+      if (!acquired) return { acquired: false };
+      try {
+        return { acquired: true, result: await callback() };
+      } finally {
+        await connection`
+          SELECT pg_advisory_unlock(
+            ${SANCTIONS_IMPORT_ADVISORY_LOCK_NAMESPACE},
+            hashtext(${source})
+          )
+        `;
+      }
+    });
   }
 
   async finishRun(
@@ -142,5 +176,16 @@ export class SanctionsRepository {
       recordsImported: Number(row.recordsImported),
       errors: (row.errors as unknown[]) ?? [],
     };
+  }
+
+  async hasSuccessfulRunBySource(source: string): Promise<boolean> {
+    const rows = await this.dbs.db.execute(sql`
+      SELECT 1
+      FROM sanctions_import_runs
+      WHERE source = ${source}
+        AND status = 'completed'
+      LIMIT 1
+    `);
+    return (rows as unknown[]).length > 0;
   }
 }
