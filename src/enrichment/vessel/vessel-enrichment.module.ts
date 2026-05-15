@@ -5,13 +5,11 @@ import { ConfigModule } from '../../shared/config/config.module';
 import { ConfigService } from '../../shared/config/config.service';
 import { DbModule } from '../../shared/db/db.module';
 import { RedisModule } from '../../shared/redis/redis.module';
-import {
-  ENRICHMENT_VESSEL_QUEUE,
-  EnrichmentDispatcher,
-  enrichmentRedisProvider,
-} from './enrichment-dispatcher';
+import { ENRICHMENT_VESSEL_QUEUE, enrichmentRedisProvider } from './enrichment.types';
 import { EnrichmentProcessor } from './enrichment.processor';
 import { EnrichmentRepository } from './enrichment.repository';
+import { VesselEnrichmentRequester } from './vessel-enrichment.requester';
+import { VesselPersistedConsumer } from './vessel-persisted.consumer';
 
 @Module({
   imports: [
@@ -33,7 +31,13 @@ import { EnrichmentRepository } from './enrichment.repository';
       }),
     }),
   ],
-  providers: [EnrichmentRepository, enrichmentRedisProvider, EnrichmentDispatcher, EnrichmentProcessor],
+  providers: [
+    EnrichmentRepository,
+    enrichmentRedisProvider,
+    VesselEnrichmentRequester,
+    VesselPersistedConsumer,
+    EnrichmentProcessor,
+  ],
   exports: [EnrichmentRepository],
 })
 export class VesselEnrichmentModule {}

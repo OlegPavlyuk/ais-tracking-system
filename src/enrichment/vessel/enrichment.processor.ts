@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger } from '@nestjs/common';
+import { Inject } from '@nestjs/common';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter } from 'prom-client';
 import { PinoLogger } from 'nestjs-pino';
@@ -10,21 +10,13 @@ import { EVENT_BUS, EventBus } from '../../shared/bus/event-bus';
 import { VESSEL_ENRICHED_STREAM } from '../../shared/config/constants';
 import { ConfigService } from '../../shared/config/config.service';
 import { ENRICHMENT_JOBS_TOTAL, SANCTIONS_MATCHES_TOTAL } from '../../shared/metrics/metric-names';
-import {
-  ENRICHMENT_REDIS,
-  ENRICHMENT_VESSEL_QUEUE,
-  EnrichmentJobData,
-  checkedKey,
-  profileHashFor,
-  profileKey,
-} from './enrichment-dispatcher';
+import { ENRICHMENT_REDIS, ENRICHMENT_VESSEL_QUEUE, EnrichmentJobData } from './enrichment.types';
 import { EnrichmentRepository } from './enrichment.repository';
 import { match, MatchInput, MatchResult, normalizeName, SanctionCandidate } from './matcher';
+import { checkedKey, profileHashFor, profileKey } from './vessel-enrichment.requester';
 
 @Processor(ENRICHMENT_VESSEL_QUEUE, { concurrency: 1 })
 export class EnrichmentProcessor extends WorkerHost {
-  private readonly logger = new Logger(EnrichmentProcessor.name);
-
   constructor(
     @Inject(EnrichmentRepository) private readonly repo: EnrichmentRepository,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
