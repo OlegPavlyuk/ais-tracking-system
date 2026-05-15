@@ -90,6 +90,13 @@ export interface VesselDetailRow {
   } | null;
 }
 
+export interface PersistedVesselSummary {
+  vesselId: string;
+  mmsi: string;
+  imo: string | null;
+  name: string | null;
+}
+
 @Injectable()
 export class VesselsRepository {
   constructor(
@@ -122,11 +129,11 @@ export class VesselsRepository {
    * stream replay is a no-op rather than a duplicate row. Stale telemetry is
    * filtered before the transaction so dropped events perform no DB writes.
    */
-  async upsertPosition(event: PositionEvent): Promise<void> {
+  async upsertPosition(event: PositionEvent): Promise<PersistedVesselSummary | null> {
     const db = this.dbs.db;
-    if (this.dropIfStaleTelemetry(event)) return;
+    if (this.dropIfStaleTelemetry(event)) return null;
 
-    await this.timed('vessels.upsertPosition', () =>
+    const summary = await this.timed('vessels.upsertPosition', () =>
       db.transaction(async (tx) => {
         const inserted = await tx.execute(sql`
         INSERT INTO vessels (mmsi, name, updated_at)
@@ -134,9 +141,16 @@ export class VesselsRepository {
         ON CONFLICT (mmsi) DO UPDATE
           SET name = COALESCE(vessels.name, EXCLUDED.name),
               updated_at = NOW()
-        RETURNING id
+        RETURNING id, mmsi, imo, name
       `);
-        const row = (inserted as unknown as Array<{ id: string }>)[0];
+        const row = (
+          inserted as unknown as Array<{
+            id: string;
+            mmsi: string;
+            imo: string | null;
+            name: string | null;
+          }>
+        )[0];
         if (!row) throw new Error(`vessels upsert returned no row for mmsi=${event.mmsi}`);
 
         await tx.execute(sql`
@@ -184,11 +198,19 @@ export class VesselsRepository {
           )
           ON CONFLICT (vessel_id, occurred_at) DO NOTHING
         `);
+
+        return {
+          vesselId: row.id,
+          mmsi: row.mmsi,
+          imo: row.imo,
+          name: row.name,
+        };
       }),
     );
     this.writes.inc({ table: 'vessels' });
     this.writes.inc({ table: 'vessel_positions_latest' });
     this.writes.inc({ table: 'vessel_positions_history' });
+    return summary;
   }
 
   async findTrack(
@@ -272,10 +294,10 @@ export class VesselsRepository {
    * over EXCLUDED), so a partial Type 24 Part-A message does not erase
    * IMO/dimensions previously learned from a Type 5.
    */
-  async upsertProfile(event: StaticEvent): Promise<void> {
-    if (this.dropIfStaleTelemetry(event)) return;
+  async upsertProfile(event: StaticEvent): Promise<PersistedVesselSummary | null> {
+    if (this.dropIfStaleTelemetry(event)) return null;
 
-    await this.timed('vessels.upsertProfile', () =>
+    const rows = await this.timed('vessels.upsertProfile', () =>
       this.dbs.db.execute(sql`
       INSERT INTO vessels (
         mmsi, imo, name, call_sign, ship_type, destination,
@@ -306,9 +328,25 @@ export class VesselsRepository {
             dimension_to_port      = COALESCE(EXCLUDED.dimension_to_port,      vessels.dimension_to_port),
             dimension_to_starboard = COALESCE(EXCLUDED.dimension_to_starboard, vessels.dimension_to_starboard),
             updated_at             = NOW()
+      RETURNING id, mmsi, imo, name
     `),
     );
+    const row = (
+      rows as unknown as Array<{
+        id: string;
+        mmsi: string;
+        imo: string | null;
+        name: string | null;
+      }>
+    )[0];
+    if (!row) throw new Error(`vessels profile upsert returned no row for mmsi=${event.mmsi}`);
     this.writes.inc({ table: 'vessels' });
+    return {
+      vesselId: row.id,
+      mmsi: row.mmsi,
+      imo: row.imo,
+      name: row.name,
+    };
   }
 
   private dropIfStaleTelemetry(event: PositionEvent | StaticEvent): boolean {

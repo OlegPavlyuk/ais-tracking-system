@@ -1,7 +1,10 @@
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { VesselsRepository } from './vessels.repository';
 import { SCHEMA_VERSION, PositionEvent, StaticEvent } from '../contracts';
 import { ConfigService } from '../shared/config/config.service';
 import { stubCounter, stubHistogram, stubPinoLogger } from '../shared/testing/metrics-stubs';
+
+const dialect = new PgDialect();
 
 describe('VesselsRepository', () => {
   function positionEvent(overrides: Partial<PositionEvent> = {}): PositionEvent {
@@ -40,9 +43,15 @@ describe('VesselsRepository', () => {
     };
   }
 
-  function repo(txExecute: jest.Mock, historyDropped = stubCounter(), logger = stubPinoLogger()) {
+  function repo(
+    txExecute: jest.Mock,
+    historyDropped = stubCounter(),
+    logger = stubPinoLogger(),
+    dbExecute = jest.fn(),
+  ) {
     const dbs = {
       db: {
+        execute: dbExecute,
         transaction: jest.fn(async (cb) => cb({ execute: txExecute })),
       },
     };
@@ -69,8 +78,9 @@ describe('VesselsRepository', () => {
     const warnSpy = jest.spyOn(logger, 'warn');
     const txExecute = jest.fn();
 
-    await repo(txExecute, historyDropped, logger).upsertPosition(positionEvent());
+    const result = await repo(txExecute, historyDropped, logger).upsertPosition(positionEvent());
 
+    expect(result).toBeNull();
     expect(txExecute).not.toHaveBeenCalled();
     expect(droppedSpy).toHaveBeenCalledWith({ reason: 'too_old' });
     expect(warnSpy).toHaveBeenCalledWith(
@@ -93,8 +103,9 @@ describe('VesselsRepository', () => {
     const warnSpy = jest.spyOn(logger, 'warn');
     const txExecute = jest.fn();
 
-    await repo(txExecute, historyDropped, logger).upsertProfile(staticEvent());
+    const result = await repo(txExecute, historyDropped, logger).upsertProfile(staticEvent());
 
+    expect(result).toBeNull();
     expect(txExecute).not.toHaveBeenCalled();
     expect(droppedSpy).toHaveBeenCalledWith({ reason: 'too_old' });
     expect(warnSpy).toHaveBeenCalledWith(
@@ -115,15 +126,59 @@ describe('VesselsRepository', () => {
     const droppedSpy = jest.spyOn(historyDropped, 'inc');
     const txExecute = jest
       .fn()
-      .mockResolvedValueOnce([{ id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }])
+      .mockResolvedValueOnce([
+        {
+          id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          mmsi: '241935000',
+          imo: '9187629',
+          name: 'SEA MOON',
+        },
+      ])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    await repo(txExecute, historyDropped).upsertPosition(
+    const result = await repo(txExecute, historyDropped).upsertPosition(
       positionEvent({ occurredAt: new Date().toISOString() }),
     );
 
+    expect(result).toEqual({
+      vesselId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      mmsi: '241935000',
+      imo: '9187629',
+      name: 'SEA MOON',
+    });
     expect(txExecute).toHaveBeenCalledTimes(3);
+    expect(dialect.sqlToQuery(txExecute.mock.calls[0]![0]).sql).toMatch(
+      /RETURNING id, mmsi, imo, name/i,
+    );
     expect(droppedSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns the merged persisted vessel summary for static profile upserts', async () => {
+    const txExecute = jest.fn();
+    const dbExecute = jest.fn().mockResolvedValueOnce([
+      {
+        id: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+        mmsi: '241935000',
+        imo: '9187629',
+        name: 'SEA MOON',
+      },
+    ]);
+
+    const result = await repo(txExecute, stubCounter(), stubPinoLogger(), dbExecute).upsertProfile(
+      staticEvent({ occurredAt: new Date().toISOString() }),
+    );
+
+    expect(result).toEqual({
+      vesselId: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+      mmsi: '241935000',
+      imo: '9187629',
+      name: 'SEA MOON',
+    });
+    expect(txExecute).not.toHaveBeenCalled();
+    expect(dbExecute).toHaveBeenCalledTimes(1);
+    expect(dialect.sqlToQuery(dbExecute.mock.calls[0]![0]).sql).toMatch(
+      /RETURNING id, mmsi, imo, name/i,
+    );
   });
 });
