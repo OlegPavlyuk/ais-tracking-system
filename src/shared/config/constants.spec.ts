@@ -1,7 +1,12 @@
 import {
   AIS_COVERAGE_BBOXES,
+  AIS_DEADLETTER_STREAM,
+  AIS_EVENTS_STREAM,
   BLACK_SEA_BBOX,
+  KNOWN_STREAMS,
   LEVANT_EAST_MEDITERRANEAN_BBOX,
+  VESSEL_ENRICHED_STREAM,
+  VESSEL_PERSISTED_STREAM,
   pointInAnyBbox,
   toAisStreamBoundingBox,
 } from './constants';
@@ -26,5 +31,14 @@ describe('coverage bbox helpers', () => {
 
   it('rejects points outside every supported coverage bbox', () => {
     expect(pointInAnyBbox(0, 0, AIS_COVERAGE_BBOXES)).toBe(false);
+  });
+
+  it('includes all known internal streams for admin and metrics introspection', () => {
+    expect(KNOWN_STREAMS).toEqual([
+      AIS_EVENTS_STREAM,
+      VESSEL_PERSISTED_STREAM,
+      VESSEL_ENRICHED_STREAM,
+      AIS_DEADLETTER_STREAM,
+    ]);
   });
 });

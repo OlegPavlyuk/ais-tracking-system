@@ -30,7 +30,11 @@ export const StaticEventSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   kind: z.literal('static'),
   mmsi: Mmsi,
-  imo: z.string().regex(/^\d{7}$/).nullable().optional(),
+  imo: z
+    .string()
+    .regex(/^\d{7}$/)
+    .nullable()
+    .optional(),
   name: z.string().max(255).nullable().optional(),
   callSign: z.string().max(32).nullable().optional(),
   shipType: z.number().int().gte(0).lte(255).nullable().optional(),
@@ -51,6 +55,22 @@ export const CanonicalEventSchema = z.discriminatedUnion('kind', [
   StaticEventSchema,
 ]);
 export type CanonicalEvent = z.infer<typeof CanonicalEventSchema>;
+
+export const VesselPersistedEventSchema = z.object({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  kind: z.literal('vessel.persisted'),
+  vesselId: z.string().uuid(),
+  mmsi: z.string().regex(/^\d{9}$/),
+  imo: z
+    .string()
+    .regex(/^\d{7}$/)
+    .nullable(),
+  name: z.string().max(255).nullable(),
+  sourceEventKind: z.enum(['position', 'static']),
+  persistedAt: z.string().datetime({ offset: true }),
+  traceId: z.string().uuid().optional(),
+});
+export type VesselPersistedEvent = z.infer<typeof VesselPersistedEventSchema>;
 
 /** Raw provider message envelope handed from connector → filter → normalizer. */
 export interface RawProviderMessage<T = unknown> {

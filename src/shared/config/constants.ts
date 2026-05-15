@@ -67,12 +67,14 @@ export function toAisStreamBoundingBox(bbox: Bbox): AisStreamBoundingBox {
 }
 
 export const AIS_EVENTS_STREAM = 'ais.events.v1';
+export const VESSEL_PERSISTED_STREAM = 'vessel.persisted.v1';
 export const VESSEL_ENRICHED_STREAM = 'vessel.enriched';
 export const AIS_DEADLETTER_STREAM = 'ais.deadletter';
 
 /** Streams introspected by `GET /admin/streams`. Update when adding new streams. */
 export const KNOWN_STREAMS: readonly string[] = [
   AIS_EVENTS_STREAM,
+  VESSEL_PERSISTED_STREAM,
   VESSEL_ENRICHED_STREAM,
   AIS_DEADLETTER_STREAM,
 ] as const;
