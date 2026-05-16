@@ -166,6 +166,18 @@ describe('VesselEnrichmentRequester.request', () => {
     });
   });
 
+  it('uses the same deterministic job ID for duplicate persisted events with the same profile', async () => {
+    const event = persistedEvent();
+    const { queue, requester } = setup();
+
+    const first = await requester.request(event);
+    const second = await requester.request(event);
+
+    expect(queue.add).toHaveBeenCalledTimes(2);
+    expect(first).toEqual(second);
+    expect(queue.add.mock.calls[0]![2]?.jobId).toBe(queue.add.mock.calls[1]![2]?.jobId);
+  });
+
   it('passes expected EnrichmentJobData', async () => {
     const event = persistedEvent({ imo: null, name: 'ARTAVIL' });
     const { queue, requester } = setup();
