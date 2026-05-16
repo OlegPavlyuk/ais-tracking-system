@@ -25,6 +25,10 @@ export interface VesselEnrichmentRequest {
   traceId?: string;
 }
 
+export type VesselEnrichmentRequestResult =
+  | { status: 'enqueued'; trigger: EnrichmentTrigger; jobId: string }
+  | { status: 'skipped'; reason: 'fresh' };
+
 export function profileHashFor(p: ProfileFingerprint): string {
   const payload = JSON.stringify({ imo: p.imo ?? '', name: normalizeName(p.name) });
   return createHash('sha1').update(payload).digest('hex').slice(0, 16);
@@ -43,7 +47,7 @@ export class VesselEnrichmentRequester {
     this.pino.setContext(VesselEnrichmentRequester.name);
   }
 
-  async request(request: VesselEnrichmentRequest): Promise<void> {
+  async request(request: VesselEnrichmentRequest): Promise<VesselEnrichmentRequestResult> {
     const candidateHash = profileHashFor(request);
 
     const [cachedProfile, cachedChecked] = await Promise.all([
@@ -52,7 +56,7 @@ export class VesselEnrichmentRequester {
     ]);
 
     const trigger = this.decide(cachedProfile, cachedChecked, candidateHash);
-    if (!trigger) return;
+    if (!trigger) return { status: 'skipped', reason: 'fresh' };
 
     const jobId = `enrich.${request.vesselId}.${trigger}.${candidateHash}`;
     await this.queue.add(
@@ -78,6 +82,7 @@ export class VesselEnrichmentRequester {
       },
       'enqueued enrichment job',
     );
+    return { status: 'enqueued', trigger, jobId };
   }
 
   private decide(

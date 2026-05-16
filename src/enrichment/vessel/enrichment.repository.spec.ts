@@ -108,6 +108,52 @@ describe('EnrichmentRepository.applyEnrichment', () => {
   });
 });
 
+describe('EnrichmentRepository.findVesselsNeedingEnrichment', () => {
+  it('finds unchecked or stale vessels with a narrow deterministic query builder path', async () => {
+    const chain = makeSelectChain([
+      {
+        id: 'v-1',
+        mmsi: '572469210',
+        imo: '9187629',
+        name: 'ARTAVIL',
+      },
+    ]);
+    const select = jest.fn(() => chain);
+    const repo = new EnrichmentRepository(
+      fakeDbs(jest.fn(), select),
+      stubHistogram(),
+      stubCounter(),
+    );
+
+    await expect(
+      repo.findVesselsNeedingEnrichment(500, '2026-05-01T00:00:00.000Z'),
+    ).resolves.toEqual([
+      {
+        id: 'v-1',
+        mmsi: '572469210',
+        imo: '9187629',
+        name: 'ARTAVIL',
+      },
+    ]);
+
+    expect(select).toHaveBeenCalledWith({
+      id: expect.anything(),
+      mmsi: expect.anything(),
+      imo: expect.anything(),
+      name: expect.anything(),
+    });
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    const whereSql = dialect.sqlToQuery(chain.where.mock.calls[0]![0]);
+    expect(whereSql.sql).toMatch(/sanctions_checked_at.*is null/i);
+    expect(whereSql.sql).toMatch(/sanctions_checked_at.*< \$1/i);
+    expect(whereSql.params).toEqual(['2026-05-01T00:00:00.000Z']);
+    expect(chain.orderBy).toHaveBeenCalledTimes(1);
+    const orderSql = dialect.sqlToQuery(chain.orderBy.mock.calls[0]![0]);
+    expect(orderSql.sql).toMatch(/sanctions_checked_at.*NULLS FIRST/i);
+    expect(chain.limit).toHaveBeenCalledWith(500);
+  });
+});
+
 describe('EnrichmentRepository sanctions candidate lookups', () => {
   it('loads vessel fingerprints through a targeted Drizzle path', async () => {
     const chain = makeSelectChain([
@@ -274,6 +320,7 @@ describe('EnrichmentRepository sanctions candidate lookups', () => {
 interface SelectChain<T> extends PromiseLike<T[]> {
   from: jest.Mock<SelectChain<T>>;
   where: jest.Mock<SelectChain<T>>;
+  orderBy: jest.Mock<SelectChain<T>>;
   limit: jest.Mock<Promise<T[]>>;
   catch: Promise<T[]>['catch'];
   finally: Promise<T[]>['finally'];
@@ -284,6 +331,7 @@ function makeSelectChain<T>(result: T[]): SelectChain<T> {
   const chain = {} as SelectChain<T>;
   chain.from = jest.fn(() => chain);
   chain.where = jest.fn(() => chain);
+  chain.orderBy = jest.fn(() => chain);
   chain.limit = jest.fn(() => promise);
   chain.then = promise.then.bind(promise);
   chain.catch = promise.catch.bind(promise);

@@ -8,6 +8,7 @@ import { RedisModule } from '../../shared/redis/redis.module';
 import { ENRICHMENT_VESSEL_QUEUE, enrichmentRedisProvider } from './enrichment.types';
 import { EnrichmentProcessor } from './enrichment.processor';
 import { EnrichmentRepository } from './enrichment.repository';
+import { VesselEnrichmentReconciler } from './vessel-enrichment.reconciler';
 import { VesselEnrichmentRequester } from './vessel-enrichment.requester';
 import { VesselPersistedConsumer } from './vessel-persisted.consumer';
 
@@ -36,6 +37,7 @@ import { VesselPersistedConsumer } from './vessel-persisted.consumer';
     enrichmentRedisProvider,
     VesselEnrichmentRequester,
     VesselPersistedConsumer,
+    VesselEnrichmentReconciler,
     EnrichmentProcessor,
   ],
   exports: [EnrichmentRepository],

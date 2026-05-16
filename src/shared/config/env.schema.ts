@@ -60,6 +60,12 @@ export const EnvSchema = z.object({
     .default(7 * 24 * 60 * 60),
   ENRICHMENT_JOB_ATTEMPTS: z.coerce.number().int().positive().default(3),
   ENRICHMENT_JOB_BACKOFF_MS: z.coerce.number().int().positive().default(5000),
+  ENRICHMENT_RECONCILIATION_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30 * 60 * 1000),
+  ENRICHMENT_RECONCILIATION_BATCH_SIZE: z.coerce.number().int().positive().default(500),
 
   STREAM_MAXLEN: z.coerce.number().int().positive().default(100_000),
   STREAM_RETRY_LIMIT: z.coerce.number().int().positive().default(3),

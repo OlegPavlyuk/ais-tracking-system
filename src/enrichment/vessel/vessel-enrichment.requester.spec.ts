@@ -75,7 +75,7 @@ describe('VesselEnrichmentRequester.request', () => {
     const event = persistedEvent({ traceId: '018f7392-15b3-7c4b-9b37-25d6dc2ddf84' });
     const { queue, requester } = setup();
 
-    await requester.request(event);
+    const result = await requester.request(event);
 
     expect(queue.add).toHaveBeenCalledTimes(1);
     const [name, data] = queue.add.mock.calls[0]!;
@@ -89,6 +89,12 @@ describe('VesselEnrichmentRequester.request', () => {
       observedName: event.name,
       traceId: event.traceId,
     });
+    const expectedHash = profileHashFor({ imo: event.imo, name: event.name });
+    expect(result).toEqual({
+      status: 'enqueued',
+      trigger: 'discovered',
+      jobId: `enrich.${event.vesselId}.discovered.${expectedHash}`,
+    });
   });
 
   it('enqueues profile_changed when profile hash changed', async () => {
@@ -98,7 +104,7 @@ describe('VesselEnrichmentRequester.request', () => {
       [checkedKey(event.vesselId)]: '1',
     });
 
-    await requester.request(event);
+    const result = await requester.request(event);
 
     expect(queue.add).toHaveBeenCalledTimes(1);
     const [, data] = queue.add.mock.calls[0]!;
@@ -107,6 +113,11 @@ describe('VesselEnrichmentRequester.request', () => {
       trigger: 'profile_changed',
       profileHash: profileHashFor({ imo: event.imo, name: event.name }),
     });
+    expect(result).toEqual({
+      status: 'enqueued',
+      trigger: 'profile_changed',
+      jobId: `enrich.${event.vesselId}.profile_changed.${profileHashFor({ imo: event.imo, name: event.name })}`,
+    });
   });
 
   it('enqueues stale when checked key is missing', async () => {
@@ -114,11 +125,16 @@ describe('VesselEnrichmentRequester.request', () => {
     const profileHash = profileHashFor({ imo: event.imo, name: event.name });
     const { queue, requester } = setup({ [profileKey(event.vesselId)]: profileHash });
 
-    await requester.request(event);
+    const result = await requester.request(event);
 
     expect(queue.add).toHaveBeenCalledTimes(1);
     const [, data] = queue.add.mock.calls[0]!;
     expect(data).toMatchObject({ vesselId: event.vesselId, trigger: 'stale' });
+    expect(result).toEqual({
+      status: 'enqueued',
+      trigger: 'stale',
+      jobId: `enrich.${event.vesselId}.stale.${profileHash}`,
+    });
   });
 
   it('skips when profile hash matches and checked key exists', async () => {
@@ -129,9 +145,10 @@ describe('VesselEnrichmentRequester.request', () => {
       [checkedKey(event.vesselId)]: '1',
     });
 
-    await requester.request(event);
+    const result = await requester.request(event);
 
     expect(queue.add).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: 'skipped', reason: 'fresh' });
   });
 
   it('uses deterministic job ID', async () => {

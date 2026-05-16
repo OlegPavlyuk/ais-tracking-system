@@ -17,6 +17,8 @@ describe('ConfigService', () => {
     expect(config.get('WS_SEND_QUEUE_MAX')).toBe(256);
     expect(config.get('WS_BUFFERED_AMOUNT_LIMIT_BYTES')).toBe(1024 * 1024);
     expect(config.get('WS_HEARTBEAT_INTERVAL_MS')).toBe(30_000);
+    expect(config.get('ENRICHMENT_RECONCILIATION_INTERVAL_MS')).toBe(30 * 60 * 1000);
+    expect(config.get('ENRICHMENT_RECONCILIATION_BATCH_SIZE')).toBe(500);
   });
 
   it('throws when DATABASE_URL is missing', () => {

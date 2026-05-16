@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter, Histogram } from 'prom-client';
-import { eq, or, sql, type SQL } from 'drizzle-orm';
+import { asc, eq, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { DbService } from '../../shared/db/db.service';
 import { DB_QUERY_DURATION_SECONDS, DB_WRITES_TOTAL } from '../../shared/metrics/metric-names';
 import { sanctionedEntities, vessels } from '../../storage/schema';
@@ -60,6 +60,33 @@ export class EnrichmentRepository {
       imo: row.imo,
       name: row.name,
     };
+  }
+
+  async findVesselsNeedingEnrichment(
+    limit: number,
+    staleBefore: string,
+  ): Promise<VesselFingerprint[]> {
+    const rows = await this.timed('enrichment.findVesselsNeedingEnrichment', () =>
+      this.dbs.db
+        .select({
+          id: vessels.id,
+          mmsi: vessels.mmsi,
+          imo: vessels.imo,
+          name: vessels.name,
+        })
+        .from(vessels)
+        .where(
+          or(isNull(vessels.sanctionsCheckedAt), lt(vessels.sanctionsCheckedAt, new Date(staleBefore))),
+        )
+        .orderBy(sql`${vessels.sanctionsCheckedAt} NULLS FIRST`, asc(vessels.updatedAt))
+        .limit(limit),
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      mmsi: row.mmsi,
+      imo: row.imo,
+      name: row.name,
+    }));
   }
 
   async findSanctionCandidatesByImo(imo: string): Promise<SanctionCandidate[]> {
