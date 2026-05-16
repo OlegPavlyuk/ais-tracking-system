@@ -18,6 +18,7 @@ change, update this file in the same PR.
 - Migration path to RabbitMQ documented but not built for MVP.
 - Streams:
   - `ais.events.v1` — canonical position/static events.
+  - `vessel.persisted.v1` — post-persistence vessel facts emitted by storage.
   - `vessel.enriched` — enrichment results.
   - `ais.deadletter` — poison messages.
 - Stream trim: `MAXLEN ~ 100k` (configurable).
@@ -34,9 +35,15 @@ Provider Connector → Raw Filter → Normalizer → Dedup/Sampler → Publisher
                                                           ais.events.v1
                                                                   │
         ┌─────────────────────────────┬─────────────────────────────┐
-        ▼                             ▼                             ▼
-  storage-writer            realtime-gateway            enrichment-dispatcher
-  (Postgres)                (WebSocket fanout)          (BullMQ jobs)
+        ▼                             ▼
+  storage-writer            realtime-gateway
+  (Postgres)                (WebSocket fanout)
+        │
+        ▼
+  vessel.persisted.v1
+        │
+        ▼
+  vessel-persisted consumer → VesselEnrichmentRequester → BullMQ jobs
 ```
 
 - Single Nest app, multi-role via `PROCESS_ROLE=all|api|ingestion|worker`.
@@ -100,12 +107,16 @@ AIS position/static events older than retention are treated as expected stale
 telemetry: they increment `history_events_dropped_total{reason="too_old"}`, emit
 a structured log, and return before any DB transaction. The guard intentionally
 lives at the storage boundary, where stale history can otherwise target dropped
-daily partitions; enrichment dispatch keeps its normal lightweight lookup/job
-decision path.
+daily partitions. Events dropped here do not produce `vessel.persisted.v1`;
+future unchecked/stale reconciliation is the enrichment recovery path.
 Current position events then perform vessel identity UPSERT, `_latest` UPSERT,
-and `_history` INSERT in a **single DB transaction**. The latest-position
-timestamp guard remains as a secondary replay/out-of-order protection inside
-the retained window.
+and `_history` INSERT in a **single DB transaction**. Static events upsert the
+merged vessel profile and preserve existing non-null profile fields when an
+incoming static message is partial. After either write succeeds and returns a
+persisted vessel summary, `StorageWriterConsumer` publishes `vessel.persisted.v1`
+as a best-effort post-commit domain fact. Publish failure is logged but does not
+fail the storage handler. The latest-position timestamp guard remains as a
+secondary replay/out-of-order protection inside the retained window.
 
 PostGIS column type is `geometry(Point, 4326)` (not `geography`). Justification:
 the primary use case is bbox queries within the Black Sea region; geometry is
@@ -144,11 +155,12 @@ consumer-group worker and WS fanout pods to scale fanout independently.
 For MVP, sanctions data is **imported and matched locally**, not queried
 per-vessel via an external API.
 
-Sources for MVP:
+Sources:
 
-- **OFAC SDN consolidated** (XML, public domain).
+- **OFAC SDN consolidated** (XML, public domain) is implemented.
 - **OpenSanctions vessels bulk** (CSV/JSON, CC-BY-NC 4.0, free for
-  non-commercial portfolio use; attribution required in README/UI).
+  non-commercial portfolio use; attribution required in README/UI) is planned
+  as a second adapter.
 - EU consolidated list — **dropped from MVP**.
 
 Architecture:
@@ -167,14 +179,21 @@ Tables:
 
 Per-vessel enrichment:
 
-- `enrichment-dispatcher` consumes `ais.events.v1`, decides whether to enqueue
-  a job. Triggers:
+- `VesselPersistedConsumer` consumes `vessel.persisted.v1`, validates the
+  storage-confirmed vessel fact, and calls `VesselEnrichmentRequester`.
+- `VesselEnrichmentRequester` owns the Redis cache checks, profile hash, trigger
+  selection, and BullMQ enqueue. Triggers:
   - new MMSI discovered;
   - profile change (IMO/name learned or changed);
-  - staleness — `sanctions_checked_at` older than 7 days.
+  - missing checked-cache entry, which represents a stale or not-yet-cached check.
+- `VesselEnrichmentReconciler` is a worker-side fallback that periodically scans
+  persisted vessels whose `sanctions_checked_at` is null or older than
+  `ENRICHMENT_STALENESS_SECONDS` and calls the same requester. It recovers
+  unchecked/stale vessels after missed immediate events; it is not intended to
+  immediately detect every profile change while the vessel is still fresh.
 - Jobs run on BullMQ queue `enrichment.vessel` with exponential backoff.
-- Idempotency: `jobId = enrich:{vessel_id}:{trigger_reason}:{trigger_payload_hash}`,
-  guarded by `WHERE sanctions_checked_at IS NULL OR sanctions_checked_at < $`.
+- Idempotency: `jobId = enrich.{vesselId}.{trigger}.{profileHash}`,
+  guarded by `WHERE sanctions_checked_at IS NULL OR sanctions_checked_at < checkedAt`.
 - Matching strategy (exact only for MVP):
   1. IMO match.
   2. MMSI match.
@@ -330,7 +349,7 @@ src/
   ingestion/               # provider adapters + raw filter
   pipeline/                # normalizer, dedup, sampler, publisher
   storage/                 # Drizzle schema, repositories, storage-writer consumer
-  enrichment/              # sanctions sources, importer, dispatcher, worker, matcher
+  enrichment/              # sanctions sources, importer, persisted consumer, requester, reconciler, worker, matcher
   realtime/                # WS gateway, subscription, fanout consumer
   api/                     # public REST controllers
   admin/                   # admin REST, ADMIN_TOKEN guard
@@ -342,6 +361,9 @@ Hard rules:
 - `storage/` owns the Drizzle schema. Other modules use repository interfaces.
 - `ingestion/` never touches canonical types. Normalization happens in `pipeline/`.
 - `realtime/` does not read from the DB at runtime.
+- `enrichment/` does not subscribe directly to `ais.events.v1`; dispatch starts
+  from storage-confirmed `vessel.persisted.v1` events or the unchecked/stale
+  reconciler.
 
 ## Testing
 

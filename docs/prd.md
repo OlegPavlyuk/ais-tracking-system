@@ -20,10 +20,13 @@ scrutiny.
 A modular Nest-based backend that ingests AISStream WebSocket data, filters it
 to the Black Sea region, normalizes it into a canonical event contract,
 publishes it to Redis Streams, fans it out to consumers (storage, realtime,
-enrichment), and serves it via REST + WebSocket to a MapLibre frontend. Sanctions
-data is brought in via a multi-source ETL (OFAC + OpenSanctions) and matched
-locally to vessels by IMO / MMSI / normalized name. Every architectural seam is
-documented and observable via Prometheus + Grafana.
+and post-persistence enrichment), and serves it via REST + WebSocket to a
+MapLibre frontend. Storage emits `vessel.persisted.v1` only after a vessel write
+succeeds; enrichment consumes that storage-confirmed fact, decides whether to
+enqueue work, and falls back to a periodic unchecked/stale reconciler. Sanctions
+data is brought in via ETL and matched locally to vessels by IMO / MMSI /
+normalized name. Every architectural seam is documented and observable via
+Prometheus + Grafana.
 
 The system runs as a single Nest application that boots into one of several
 roles (`api`, `ingestion`, `worker`, or `all`) selected via `PROCESS_ROLE`,
@@ -102,9 +105,9 @@ microservice-extraction path tomorrow.
 27. As an operator, I want structured JSON logs with correlation fields
     (`traceId`, `mmsi`, `vesselId`, `streamMessageId`, `consumerGroup`,
     `provider`), so that I can trace one AIS message end-to-end via grep.
-28. As an enrichment consumer, I want sanctions lists imported daily from
-    multiple sources (OFAC, OpenSanctions) and stored locally, so that
-    per-vessel matching does not require an external API call.
+28. As an enrichment consumer, I want sanctions lists imported daily through
+    source adapters (OFAC implemented, OpenSanctions planned) and stored
+    locally, so that per-vessel matching does not require an external API call.
 29. As an enrichment consumer, I want vessels matched against sanctions data
     by exact IMO, then exact MMSI, then exact normalized name, so that match
     quality is predictable and auditable.
@@ -217,11 +220,20 @@ The PRD-relevant items:
   accepted messages into `PipelineService`.
 - `PipelineService` — normalize → dedup → sample → publish to
   `ais.events.v1`.
-- `StorageWriterConsumer` — consumer-group worker for `ais.events.v1` and
-  `vessel.enriched`; calls repositories; uses `FailureHandler`.
-- `EnrichmentDispatcher` — consumer-group worker for `ais.events.v1`;
-  decides when to enqueue an `enrichment.vessel` BullMQ job.
-- `EnrichmentWorker` — BullMQ worker, queries local sanctions data via
+- `StorageWriterConsumer` — consumer-group worker for `ais.events.v1`; writes
+  storage repositories and publishes `vessel.persisted.v1` after successful
+  vessel persistence. Persisted-event publish failures are logged and swallowed.
+- `VesselPersistedConsumer` — consumer-group worker for `vessel.persisted.v1`;
+  validates the post-persistence vessel contract and calls the requester.
+- `VesselEnrichmentRequester` — computes profile hashes, reads enrichment Redis
+  cache keys, decides discovered/profile-changed/stale/fresh outcomes, and
+  enqueues deterministic `enrichment.vessel` jobs when needed.
+- `VesselEnrichmentReconciler` — worker-side recovery loop that scans persisted
+  vessels whose `sanctions_checked_at` is null or older than
+  `ENRICHMENT_STALENESS_SECONDS`. It recovers unchecked/stale vessels; fresh
+  profile changes are handled by `vessel.persisted.v1` and otherwise wait until
+  staleness.
+- `EnrichmentProcessor` — BullMQ worker, queries local sanctions data via
   `Matcher`, updates `vessels`, publishes `vessel.enriched`.
 - `SanctionsImporter` — daily-scheduled BullMQ job per `SanctionsSourceAdapter`;
   upserts into `sanctioned_entities`; records `sanctions_import_runs`.
@@ -273,6 +285,7 @@ The PRD-relevant items:
 ### Streams
 
 - `ais.events.v1` — canonical position/static events.
+- `vessel.persisted.v1` — post-persistence vessel facts emitted by storage.
 - `vessel.enriched` — enrichment results.
 - `ais.deadletter` — poison messages with full error context.
 - `MAXLEN ~ 100k`, configurable.
@@ -318,9 +331,9 @@ not as a final phase.
   no-false-positive on null IMO/MMSI; deterministic candidate ordering.
 - `FailureHandler` — increments retry counter; ACKs and publishes to DLQ
   on third failure; preserves error context.
-- `OfacAdapter` and `OpenSanctionsAdapter` — parsing correctness against
-  fixture XML/CSV files; only vessel entities extracted; idempotent
-  `(source, source_entity_id)` upsert behavior.
+- `OfacAdapter` — parsing correctness against fixture XML; only vessel
+  entities extracted; idempotent `(source, source_entity_id)` upsert behavior.
+  `OpenSanctionsAdapter` is a planned second adapter.
 - `ConfigService` — rejects invalid env (Zod failure raises at boot); loads
   defaults; surfaces typed slices.
 - `AdminTokenGuard` — accepts valid token; rejects missing/invalid; allows
@@ -345,12 +358,12 @@ not as a final phase.
   receive the events relevant to their viewport (and only those); slow
   client's queue drops oldest position per vessel without affecting the
   other client.
-- **Sanctions ETL test**: importer ingests fixture OFAC + OpenSanctions
-  files, populates `sanctioned_entities`, records a `sanctions_import_runs`
-  row; running twice is idempotent.
-- **Enrichment loop test**: a vessel discovery event triggers an enrichment
-  job; matcher hits a fixture sanctioned entity by IMO; `vessels` is
-  updated and `vessel.enriched` is published.
+- **Sanctions ETL test**: importer ingests fixture OFAC data, populates
+  `sanctioned_entities`, records a `sanctions_import_runs` row; running twice
+  is idempotent.
+- **Enrichment loop test**: a persisted vessel event triggers an enrichment
+  job; matcher hits a fixture sanctioned entity by IMO; `vessels` is updated
+  and `vessel.enriched` is published.
 
 ### Prior art
 

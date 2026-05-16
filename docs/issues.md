@@ -214,21 +214,28 @@ metadata.
 
 ### What to build
 
-`EnrichmentDispatcher` consumer decides when a vessel needs enrichment.
-`Matcher` finds sanctions hits by IMO → MMSI → normalized name.
-`EnrichmentWorker` BullMQ updates `vessels.sanctions_status` and publishes
-`vessel.enriched`. Realtime fanout consumes the enriched events so the UI
-gets badge updates live.
+Storage emits a post-persistence `vessel.persisted.v1` event after successful
+vessel writes. `VesselPersistedConsumer` validates that event and delegates to
+`VesselEnrichmentRequester`, which decides when a vessel needs enrichment and
+enqueues deterministic BullMQ jobs. `VesselEnrichmentReconciler` periodically
+recovers unchecked/stale persisted vessels if the immediate event/enqueue path
+is missed. `Matcher` finds sanctions hits by IMO → MMSI → normalized name.
+`EnrichmentProcessor` BullMQ updates `vessels.sanctions_status` and publishes
+`vessel.enriched`. Realtime fanout consumes the enriched events so the UI gets
+badge updates live.
 
 ### Acceptance criteria
 
-- [x] `EnrichmentDispatcher` consumer-group worker on `ais.events.v1` enqueues a job on: new MMSI, profile change, or stale (`sanctions_checked_at` older than 7 days). Triggers detected via Redis cache keys `enrich:profile:{vesselId}` (set permanently by worker) and `enrich:checked:{vesselId}` (TTL = `ENRICHMENT_STALENESS_SECONDS`, default 7d).
+- [x] `StorageWriterConsumer` publishes `vessel.persisted.v1` after successful position/static persistence, and does not fail the storage handler if the best-effort publish fails.
+- [x] `VesselPersistedConsumer` consumer-group worker on `vessel.persisted.v1` validates payloads and calls `VesselEnrichmentRequester`; enrichment no longer subscribes directly to `ais.events.v1`.
+- [x] `VesselEnrichmentRequester` enqueues a job on: new MMSI, profile change, or missing checked-cache entry. Triggers are detected via Redis cache keys `enrich:profile:{vesselId}` (set permanently by worker) and `enrich:checked:{vesselId}` (TTL = `ENRICHMENT_STALENESS_SECONDS`, default 7d).
+- [x] `VesselEnrichmentReconciler` runs in the worker role, scans vessels with `sanctions_checked_at IS NULL` or older than `ENRICHMENT_STALENESS_SECONDS`, and delegates to the same requester. It is a fallback for unchecked/stale vessels, not an immediate profile-change scanner for fresh rows.
 - [x] `enrichment.vessel` BullMQ queue with idempotent `jobId = enrich.{vesselId}.{trigger}.{profileHash}` (dot-delimited because BullMQ rejects `:` in custom IDs), exponential backoff, configurable attempts. Per-source rate limiting deferred — matcher path is DB-only, no HTTP fan-out.
 - [x] `Matcher` returns matches in order: exact IMO → exact MMSI → normalized name (latter as candidate / manual-review signal). Same `normalizeName()` applied to both sides; name candidates only surface when no exact identifier match is found.
-- [x] `EnrichmentWorker` updates `vessels` with timestamp-guarded UPDATE (`WHERE sanctions_checked_at IS NULL OR sanctions_checked_at = $observed`); publishes `vessel.enriched` to Redis Stream only when the guard accepted the update; sets Redis cache keys after success.
+- [x] `EnrichmentProcessor` updates `vessels` with timestamp-guarded UPDATE (`WHERE sanctions_checked_at IS NULL OR sanctions_checked_at < $checkedAt`); publishes `vessel.enriched` to Redis Stream only when the guard accepted the update; sets Redis cache keys after success.
 - [x] `FanoutConsumer` consumes `vessel.enriched` and emits matching WS messages.
 - [x] Unit tests: `Matcher` (exact match priorities, null IMO/MMSI handling, deterministic candidate ordering).
-- [x] End-to-end test (in-process wiring): vessel discovery → enrichment job → matcher hits fixture sanctioned entity by IMO → `vessels.sanctions_status` updated → `vessel.enriched` event observable. Live verification against worker role + docker stack confirms the same loop end-to-end.
+- [x] End-to-end test (in-process wiring): persisted vessel event → requester job → matcher hits fixture sanctioned entity by IMO → `vessels.sanctions_status` updated → `vessel.enriched` event observable. Flow tests cover storage publish → persisted consumer → requester handoff.
 
 ### Blocked by
 
@@ -389,7 +396,7 @@ Live `vessel.enriched` events update the badge without reload.
 
 - [x] Click on marker opens detail panel populated from `GET /api/vessels/:id`.
 - [x] Sanctions status renders as a visible badge with source attribution.
-- [x] OpenSanctions data is shown with required CC-BY-NC 4.0 attribution.
+- [x] Sanctions source attribution is shown for imported sources. OpenSanctions-specific CC-BY-NC attribution remains tied to planned slice #9.
 - [x] `vessel.enriched` WS messages update the open panel live.
 - [x] Closing the panel cleans up subscriptions.
 

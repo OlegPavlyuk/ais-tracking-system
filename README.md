@@ -41,17 +41,20 @@ flowchart LR
 
   Events --> Storage["storage-writer<br/>consumer group"]
   Storage --> Postgres[("Postgres + PostGIS")]
+  Storage --> Persisted[("Redis Stream<br/>vessel.persisted.v1")]
 
   Events --> Realtime["realtime-fanout<br/>consumer group"]
   Realtime --> WS["/ws/positions"]
   WS --> Web["React MapLibre client"]
 
-  Events --> Dispatcher["enrichment-dispatcher"]
-  Dispatcher --> Queue[("BullMQ<br/>enrichment.vessel")]
+  Persisted --> PersistedConsumer["vessel-persisted consumer"]
+  PersistedConsumer --> Requester["VesselEnrichmentRequester"]
+  Requester --> Queue[("BullMQ<br/>enrichment.vessel")]
   Queue --> Worker["enrichment processor"]
   Worker --> Postgres
   Worker --> Enriched[("Redis Stream<br/>vessel.enriched")]
   Enriched --> Realtime
+  Reconciler["VesselEnrichmentReconciler<br/>unchecked/stale fallback"] --> Requester
 
   SanctionsJob["scheduled sanctions import"] --> ImportQueue[("BullMQ<br/>sanctions.import")]
   ImportQueue --> Importer["OFAC adapter + importer"]
@@ -110,6 +113,11 @@ against the canonical contract. Position events are written in one transaction:
 The latest table supports fast map snapshots. The history table is range
 partitioned by `occurred_at` and powers the track endpoint.
 
+After a position or static event is successfully persisted, storage publishes a
+small post-persistence domain event to `vessel.persisted.v1`. Publish failures
+are logged but do not fail the storage handler; enrichment is asynchronous
+derived state and missed immediate events are recovered by reconciliation.
+
 ### Realtime Delivery
 
 The frontend starts with `GET /api/vessels`, then subscribes to
@@ -128,9 +136,17 @@ are imported into local tables, and vessel matching happens against local data.
 1. `SanctionsScheduler` enqueues a recurring `sanctions.import` job.
 2. `OfacAdapter` downloads or reads SDN XML and extracts vessel entities.
 3. `SanctionsImporterService` writes import audit rows and idempotently upserts entities.
-4. `EnrichmentDispatcher` watches AIS events and enqueues a vessel job when a
-   vessel is discovered, its profile changes, or its cached check becomes stale.
-5. `EnrichmentProcessor` matches by IMO, MMSI, then normalized name candidate,
+4. `StorageWriterConsumer` publishes `vessel.persisted.v1` only after the
+   vessel write succeeds.
+5. `VesselPersistedConsumer` validates that event and calls
+   `VesselEnrichmentRequester`.
+6. `VesselEnrichmentRequester` owns enqueue decisions: discovered vessels,
+   profile-hash changes, and missing checked-cache entries become deterministic
+   BullMQ jobs; fresh vessels are skipped.
+7. `VesselEnrichmentReconciler` periodically scans only unchecked or stale
+   vessels and calls the same requester. It is a recovery mechanism for missed
+   immediate events, not a scanner for every fresh profile change.
+8. `EnrichmentProcessor` matches by IMO, MMSI, then normalized name candidate,
    applies a freshness-guarded update, and publishes `vessel.enriched`.
 
 ## API Overview
@@ -192,14 +208,18 @@ bbox querying. Distance-heavy queries can cast to `geography` where needed.
 
 ## Reliability and Production Signals
 
-- Redis Streams isolate producers from storage, realtime, and enrichment consumers.
+- Redis Streams isolate producers from storage, realtime, and post-persistence enrichment consumers.
 - Consumer groups acknowledge only after handler success.
 - Handler failures are retried, reclaimed with `XAUTOCLAIM`, and eventually sent to `ais.deadletter`.
 - DLQ entries retain original stream metadata and can be manually replayed.
 - Storage writes use database transactions and idempotent history insertion.
+- Storage publishes `vessel.persisted.v1` as a best-effort post-commit handoff;
+  the project intentionally does not use a transactional outbox yet.
 - Stale AIS telemetry outside the retained operational window is dropped at the storage boundary before DB writes.
 - Latest-position upserts keep an `occurred_at` guard as a secondary out-of-order protection.
 - Enrichment jobs use deterministic BullMQ job IDs and freshness-guarded updates.
+- Vessel enrichment reconciliation periodically recovers unchecked or stale
+  persisted vessels when the immediate post-persistence event or enqueue path is missed.
 - Provider health tracks connection state, last message age, and reconnect count.
 - Slow realtime clients are contained by bounded queues and heartbeat timeouts.
 - Metrics expose ingestion drops, stream lag/pending, handler latency, DB writes,

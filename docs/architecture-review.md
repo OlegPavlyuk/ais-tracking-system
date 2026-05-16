@@ -77,7 +77,10 @@ sequenceDiagram
   participant Stream as Redis Stream ais.events.v1
   participant Storage as StorageWriterConsumer
   participant RT as FanoutConsumer
-  participant Enrich as EnrichmentDispatcher
+  participant Persisted as Redis Stream vessel.persisted.v1
+  participant PersistedConsumer as VesselPersistedConsumer
+  participant Requester as VesselEnrichmentRequester
+  participant Queue as BullMQ enrichment.vessel
 
   AS->>Adapter: provider WebSocket frame
   Adapter->>Adapter: JSON parse + raw filter
@@ -87,7 +90,11 @@ sequenceDiagram
   Pipe->>Stream: XADD canonical event
   Stream->>Storage: consumer group read
   Stream->>RT: consumer group read
-  Stream->>Enrich: consumer group read
+  Storage->>Storage: persist vessel/profile/position
+  Storage->>Persisted: XADD vessel.persisted after successful write
+  Persisted->>PersistedConsumer: consumer group read
+  PersistedConsumer->>Requester: request enrichment
+  Requester->>Queue: enqueue only when discovered/changed/stale
 ```
 
 ### Storage Write Path
@@ -101,6 +108,8 @@ flowchart TB
   Tx --> Latest["upsert vessel_positions_latest<br/>guard older occurred_at"]
   Tx --> History["insert vessel_positions_history<br/>ON CONFLICT DO NOTHING"]
   Kind -->|"static"| Profile["upsert vessel profile<br/>preserve existing non-null fields"]
+  Vessel --> Persisted["publish vessel.persisted.v1<br/>after successful persistence"]
+  Profile --> Persisted
 ```
 
 ### Realtime Flow
@@ -129,9 +138,13 @@ flowchart LR
   OFAC --> Repo["SanctionsRepository"]
   Repo --> Tables[("sanctioned_entities<br/>sanctions_import_runs")]
 
-  Events[("ais.events.v1")] --> Dispatcher["EnrichmentDispatcher"]
-  Dispatcher --> RedisCache[("profile + checked cache")]
-  Dispatcher --> EnrichQ[("BullMQ enrichment.vessel")]
+  Events[("ais.events.v1")] --> Storage["StorageWriterConsumer"]
+  Storage --> Persisted[("vessel.persisted.v1")]
+  Persisted --> PersistedConsumer["VesselPersistedConsumer"]
+  PersistedConsumer --> Requester["VesselEnrichmentRequester"]
+  Requester --> RedisCache[("profile + checked cache")]
+  Requester --> EnrichQ[("BullMQ enrichment.vessel")]
+  Reconciler["VesselEnrichmentReconciler<br/>unchecked/stale fallback"] --> Requester
   EnrichQ --> Worker["EnrichmentProcessor"]
   Worker --> Tables
   Worker --> Vessels[("vessels sanctions fields")]
@@ -165,27 +178,33 @@ avoid making later extraction expensive.
 
 ### Event-Driven Internal Pipeline
 
-Canonical AIS events are published to `ais.events.v1`, and storage, realtime,
-and enrichment consume via independent Redis consumer groups. This decouples the
-provider connection from downstream latency and lets each consumer fail or lag
-independently.
+Canonical AIS events are published to `ais.events.v1`, and storage and realtime
+consume them via independent Redis consumer groups. Enrichment dispatch no
+longer consumes canonical AIS events directly: after storage successfully
+persists a vessel write, it publishes a post-persistence domain event to
+`vessel.persisted.v1`, which `VesselPersistedConsumer` validates before calling
+`VesselEnrichmentRequester`. This decouples the provider connection from
+downstream latency while ensuring enrichment decisions are based on
+storage-confirmed vessel facts.
 
 Redis Streams are a pragmatic fit for the documented scale envelope. They are
 lighter than Kafka/RabbitMQ and support replay, consumer groups, pending
 message recovery, and DLQ workflows. The tradeoff is operational: retention and
 memory sizing matter, and Redis AOF every second accepts a small loss window.
 
-This is not a classic transactional outbox implementation. Events are published
-before storage consumers write Postgres, and downstream consistency is achieved
-with idempotent consumers, retry/DLQ handling, and guarded writes. That is a
-reasonable fit for externally sourced AIS telemetry where the stream is the
-system's internal source of movement events, but it would need revisiting for
-business commands that require atomic database state plus event publication.
+This is not a classic transactional outbox implementation. Canonical AIS events
+are still produced before storage writes, and the `vessel.persisted.v1`
+handoff is a best-effort post-commit publish. A crash between DB commit and
+publish can miss the immediate enrichment request, so the worker-side
+`VesselEnrichmentReconciler` periodically scans unchecked or stale vessels and
+calls the same requester. That is a deliberate tradeoff: sanctions status is
+derived state, and the reconciler gives correctness without adding outbox
+tables, dispatchers, and cleanup for this iteration.
 
 ### Contract Validation
 
-Canonical `position`, `static`, and `vessel.enriched` events are Zod schemas.
-Consumers re-validate messages before acting. This matters because Redis
+Canonical `position`, `static`, `vessel.persisted`, and `vessel.enriched`
+events are Zod schemas. Consumers re-validate messages before acting. This matters because Redis
 Streams become a long-lived boundary: bad payloads should fail close to the
 consumer with observable handling instead of corrupting storage or client state.
 
@@ -245,10 +264,15 @@ portfolio-grade MVP while leaving room for richer scoring later.
 
 ### Idempotent Enrichment
 
-The dispatcher computes a profile hash and uses deterministic BullMQ job IDs.
-The worker applies a freshness-guarded database update and only publishes
-`vessel.enriched` after the update is accepted. Redis cache keys suppress
-unnecessary repeated checks until the staleness TTL expires.
+`VesselEnrichmentRequester` computes a profile hash and uses deterministic
+BullMQ job IDs. The worker applies a freshness-guarded database update and only
+publishes `vessel.enriched` after the update is accepted. Redis cache keys
+suppress unnecessary repeated checks until the checked-key TTL expires.
+
+The reconciler is scoped to persisted vessels whose sanctions state is missing
+or stale. Profile changes for fresh vessels are normally detected by the
+post-persistence `vessel.persisted.v1` event flow; if that immediate event is
+missed, the vessel will still be rechecked once it becomes stale.
 
 This design matters because live AIS feeds can repeat, arrive out of order, or
 learn vessel profile fields gradually.
@@ -312,7 +336,7 @@ The repository has broad unit-level coverage across backend and frontend:
 - REST controllers and admin guard behavior;
 - storage writer and repository behavior;
 - realtime protocol, subscription service, gateway, and send queue;
-- sanctions OFAC parsing, import command, matcher, enrichment dispatcher/repository;
+- sanctions OFAC parsing, import command, matcher, persisted-event enrichment requester/repository;
 - frontend WebSocket client, merge reducer, map hooks, labels, colors, and UI components.
 
 The main gap is integration coverage around real Postgres/Redis behavior. The
@@ -347,7 +371,7 @@ semantics.
 | Issue                                                          | Severity | Why It Matters                                                                                                                                                                                                                       | Recommendation                                                                                                                             |
 | -------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Historical partition lifecycle requires operational monitoring | Medium   | Daily partition maintenance is now automated, but production deployments still need alerts if maintenance fails or future partitions run low.                                                                                        | Add runbook checks and alerts for missing today/tomorrow partitions and failed maintenance runs.                                           |
-| Enrichment loads all sanctions candidates per job              | High     | `loadAllSanctionCandidates()` is simple but scales poorly as sources grow. Every vessel job becomes an O(N) scan in application memory.                                                                                              | Query by indexed IMO/MMSI first, then normalized name/alias. Add a normalized-name column or materialized search table.                    |
+| Name/alias sanctions lookup remains basic                      | Medium   | The current worker uses indexed identifier lookups first and then a narrow name/alias fallback. That is much better than full-table scans, but richer fuzzy/transliteration matching is still out of scope.                         | Add normalized-name materialization and scored fuzzy matching only after exact identifiers, preserving candidate/manual-review semantics. |
 | Realtime subscriptions are in memory                           | Medium   | Multiple API/realtime replicas would each see only their own connected clients while Redis consumer groups distribute events among consumers. Horizontal scaling could cause missed fanout unless each replica receives every event. | For multi-replica realtime, use Redis Pub/Sub or a dedicated broadcast stream/channel between stream consumers and WS pods.                |
 | Redis Streams retention is approximate and finite              | Medium   | `MAXLEN ~ 100k` bounds memory but also bounds replay. A lagging consumer can lose events if trim outruns it.                                                                                                                         | Alert on stream lag versus retention, size `STREAM_MAXLEN` from peak throughput and recovery target, and document acceptable loss windows. |
 | Integration test gaps remain                                   | Medium   | The most production-critical behavior spans Redis, BullMQ, and Postgres. Unit tests do not fully prove transaction, partition, replay, and worker semantics.                                                                         | Add Testcontainers or Docker-backed integration suites for storage, DLQ replay, sanctions import, enrichment loop, and realtime overflow.  |
@@ -367,7 +391,7 @@ per second and roughly one thousand peak. The key scaling paths are visible:
 - Keep PostGIS indexes healthy and partition history by time.
 - Size Redis Stream retention based on peak throughput and recovery objectives.
 - Introduce a realtime broadcast layer before horizontally scaling WS replicas.
-- Move sanctions matching from full scans to indexed candidate lookups.
+- Add richer normalized-name/fuzzy sanctions matching while keeping exact IMO/MMSI priority.
 
 The design avoids premature infrastructure while preserving credible migration
 paths.
@@ -422,7 +446,7 @@ infrastructure.
 1. Add integration tests for PostGIS writes, history partitions, track queries,
    DLQ replay, and BullMQ enrichment.
 2. Add production alerts/runbook checks for history partition maintenance.
-3. Replace all-candidate sanctions loading with indexed lookup paths.
+3. Add normalized-name materialization and richer candidate scoring for sanctions matching.
 4. Add OpenAPI and generated client types.
 5. Add public API rate limiting and deployment security notes.
 6. Add a realtime broadcast layer for horizontally scaled API replicas.
