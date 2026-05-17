@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { FailureHandler, serializeError } from './failure-handler';
 import { AIS_DEADLETTER_STREAM } from '../config/constants';
 import type { ConfigService } from '../config/config.service';
@@ -65,6 +66,19 @@ function makeHandler(redis: RedisMock): FailureHandler {
 }
 
 describe('FailureHandler', () => {
+  let warnSpy: jest.SpyInstance;
+  let errorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
   it('on first failure: increments counter, leaves message unacked', async () => {
     const redis = makeRedis(0);
     const handler = makeHandler(redis);
@@ -76,11 +90,7 @@ describe('FailureHandler', () => {
       error: new Error('db down'),
     });
     expect(action).toEqual({ action: 'leave-unacked', attempts: 1 });
-    expect(redis.hincrby).toHaveBeenCalledWith(
-      `dlq:retry:${STREAM}:${GROUP}:17-0`,
-      'attempts',
-      1,
-    );
+    expect(redis.hincrby).toHaveBeenCalledWith(`dlq:retry:${STREAM}:${GROUP}:17-0`, 'attempts', 1);
     expect(redis.xadd).not.toHaveBeenCalled();
   });
 

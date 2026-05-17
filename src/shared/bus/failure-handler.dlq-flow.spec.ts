@@ -1,15 +1,27 @@
+import { Logger } from '@nestjs/common';
 import { FailureHandler } from './failure-handler';
 import { AIS_DEADLETTER_STREAM } from '../config/constants';
 import type { ConfigService } from '../config/config.service';
 import type { RedisService } from '../redis/redis.service';
 
 /**
- * Integration-style test for the DLQ flow against an in-memory fake of the
- * Redis surface that FailureHandler uses (HINCRBY/HSETNX/HSET/EXPIRE/HGETALL/
- * XADD/DEL). Drives the FailureHandler 3× through the same messageId — the
- * shape that the storage-writer poison-event scenario produces in slice #10.
+ * Component-style test for the retry/DLQ flow against an in-memory fake of the
+ * Redis commands that FailureHandler uses.
  */
 describe('DLQ flow: poison message exhausts retries and lands in deadletter', () => {
+  let warnSpy: jest.SpyInstance;
+  let errorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
   it('three failures on the same messageId → DLQ entry; counter cleared', async () => {
     const fake = makeFakeRedis();
     const handler = new FailureHandler(
@@ -22,9 +34,27 @@ describe('DLQ flow: poison message exhausts retries and lands in deadletter', ()
     const messageId = '1700000000000-0';
     const payload = { schemaVersion: 1, kind: 'position', mmsi: '241935000' };
 
-    const r1 = await handler.onHandlerError({ stream, group, messageId, payload, error: new Error('first') });
-    const r2 = await handler.onHandlerError({ stream, group, messageId, payload, error: new Error('second') });
-    const r3 = await handler.onHandlerError({ stream, group, messageId, payload, error: new Error('third') });
+    const r1 = await handler.onHandlerError({
+      stream,
+      group,
+      messageId,
+      payload,
+      error: new Error('first'),
+    });
+    const r2 = await handler.onHandlerError({
+      stream,
+      group,
+      messageId,
+      payload,
+      error: new Error('second'),
+    });
+    const r3 = await handler.onHandlerError({
+      stream,
+      group,
+      messageId,
+      payload,
+      error: new Error('third'),
+    });
 
     expect(r1).toEqual({ action: 'leave-unacked', attempts: 1 });
     expect(r2).toEqual({ action: 'leave-unacked', attempts: 2 });

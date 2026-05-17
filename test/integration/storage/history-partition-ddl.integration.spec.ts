@@ -6,38 +6,18 @@ import {
   historyPartitionWindow,
   partitionNameForDay,
   parseHistoryPartitionDay,
-} from './history-partitions';
-
-const describeIfDb = process.env.RUN_DB_INTEGRATION === '1' ? describe : describe.skip;
+} from '../../../src/storage/history-partitions';
+import { assertIntegrationDatabase } from '../setup/testcontainers-postgres';
 
 function assertDestructiveDbTestAllowed(databaseUrl: string): void {
-  if (process.env.NODE_ENV !== 'test') {
-    throw new Error(
-      'Destructive DB integration tests require NODE_ENV=test. ' +
-        'Run only against a disposable local/test database.',
-    );
-  }
-
-  if (process.env.ALLOW_DESTRUCTIVE_DB_TESTS !== '1') {
-    throw new Error(
-      'Destructive DB integration tests require ALLOW_DESTRUCTIVE_DB_TESTS=1. ' +
-        `This suite recreates ${HISTORY_PARTITION_PARENT} and must never target a valuable database.`,
-    );
-  }
-
-  const { pathname } = new URL(databaseUrl);
-  if (!pathname || pathname === '/') {
-    throw new Error('DATABASE_URL must include an explicit disposable database name.');
-  }
-  if (!pathname.toLowerCase().includes('test')) {
-    throw new Error(
-      `Destructive DB integration tests require a test-named database, got "${pathname}".`,
-    );
-  }
+  assertIntegrationDatabase(databaseUrl);
 }
 
-describeIfDb('history partition DDL integration', () => {
-  const url = process.env.DATABASE_URL ?? 'postgres://ais:ais@localhost:5432/ais';
+describe('history partition DDL integration', () => {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL was not provided by Jest integration global setup.');
+  }
   const sql = postgres(url, { max: 1, onnotice: () => undefined });
 
   beforeAll(() => {

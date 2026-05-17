@@ -76,19 +76,19 @@ scaled or isolated independently when needed.
 
 ## Technology Stack
 
-| Area                 | Stack                                                       |
-| -------------------- | ----------------------------------------------------------- |
-| Backend runtime      | Node.js 22, TypeScript, NestJS                              |
-| Messaging            | Redis Streams, Redis consumer groups, BullMQ                |
-| Database             | PostgreSQL 16, PostGIS, Drizzle ORM/migrations              |
-| Realtime             | Raw `ws` WebSocket server                                   |
-| Validation           | Zod                                                         |
-| Logging              | pino / nestjs-pino                                          |
-| Metrics              | prom-client, nestjs-prometheus, Prometheus                  |
-| Dashboards           | Grafana provisioning                                        |
-| Frontend             | React 18, Vite, MapLibre GL, Zustand, React Query, Tailwind |
-| Testing              | Jest, ts-jest, Supertest, Vitest, Testing Library           |
-| Local infrastructure | Docker Compose                                              |
+| Area                 | Stack                                                             |
+| -------------------- | ----------------------------------------------------------------- |
+| Backend runtime      | Node.js 22, TypeScript, NestJS                                    |
+| Messaging            | Redis Streams, Redis consumer groups, BullMQ                      |
+| Database             | PostgreSQL 16, PostGIS, Drizzle ORM/migrations                    |
+| Realtime             | Raw `ws` WebSocket server                                         |
+| Validation           | Zod                                                               |
+| Logging              | pino / nestjs-pino                                                |
+| Metrics              | prom-client, nestjs-prometheus, Prometheus                        |
+| Dashboards           | Grafana provisioning                                              |
+| Frontend             | React 18, Vite, MapLibre GL, Zustand, React Query, Tailwind       |
+| Testing              | Jest, ts-jest, Testcontainers, Supertest, Vitest, Testing Library |
+| Local infrastructure | Docker Compose                                                    |
 
 ## Core Workflows
 
@@ -319,6 +319,7 @@ Backend:
 pnpm typecheck
 pnpm lint
 pnpm test
+pnpm test:integration
 pnpm build
 ```
 
@@ -334,23 +335,37 @@ pnpm web:build
 The repository includes broad unit coverage for provider parsing, normalization,
 pipeline quality controls, stream failure handling, realtime queues, API
 controllers, enrichment matching, sanctions import parsing, and frontend merge
-logic.
+logic. `pnpm test` runs only the fast `src/**/*.spec.ts` suites and excludes
+`*.integration.spec.ts`.
 
-Database-backed integration tests are opt-in because some suites intentionally
-recreate partitioned tables. Run them only against a disposable local/test
-database:
+Backend integration tests live under `test/integration` and are run through
+Testcontainers:
 
 ```bash
-NODE_ENV=test \
-RUN_DB_INTEGRATION=1 \
-ALLOW_DESTRUCTIVE_DB_TESTS=1 \
-DATABASE_URL=postgres://ais:ais@localhost:5432/ais_test \
-pnpm test -- --runTestsByPath src/storage/history-partition-ddl.integration.spec.ts
+pnpm test:integration
 ```
 
-The history partition DDL integration test validates generated daily partition
-SQL against real Postgres/PostGIS, including parent attachment, insert routing,
-cross-partition reads, missing-partition failures, and drop SQL.
+Expected behavior:
+
+1. Jest global setup starts an isolated `postgis/postgis:16-3.4` container.
+2. The container creates a disposable `ais_test` database automatically.
+3. Before each integration spec file, Jest drops/recreates the disposable
+   schemas and applies the normal Drizzle migrations from `./drizzle`.
+4. All `test/integration/**/*.integration.spec.ts` suites run serially.
+5. Jest global teardown stops the container and removes its volumes.
+
+The history partition DDL integration test still validates generated daily
+partition SQL against real Postgres/PostGIS, including parent attachment,
+insert routing, cross-partition reads, missing-partition failures, and drop SQL.
+Its destructive checks are guarded so they only run against the Testcontainers
+`ais_test` database. Because every spec file starts from a clean migrated
+database, destructive DDL in one suite cannot pollute later suites or make tests
+depend on file execution order.
+
+Docker must be installed and running locally or in CI. If integration tests fail
+before Jest starts the suites with a Docker connection error, start Docker and
+rerun the command. In CI, use a runner that supports Docker containers and does
+not block the Testcontainers Ryuk cleanup sidecar.
 
 ## Project Structure
 
@@ -365,6 +380,8 @@ src/
   realtime/     WebSocket gateway, fanout consumer, send queues
   shared/       Config, DB, Redis, event bus, logging, metrics, health
   storage/      Vessel repository, storage consumer, Drizzle schema
+test/
+  integration/  Testcontainers-backed and slower cross-component integration specs
 web/src/
   api/          REST client
   components/   Map UI components

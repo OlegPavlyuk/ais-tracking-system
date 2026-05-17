@@ -5,7 +5,7 @@ const config: Config = {
   testEnvironment: 'node',
   rootDir: '.',
   roots: ['<rootDir>/src'],
-  testRegex: '.*\\.spec\\.ts$',
+  testRegex: '^(?!.*\\.integration\\.spec\\.ts$).*\\.spec\\.ts$',
   moduleFileExtensions: ['ts', 'js', 'json'],
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.module.ts', '!src/main.ts'],
   coverageDirectory: 'coverage',
