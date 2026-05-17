@@ -17,6 +17,7 @@ import {
   historyRetentionCutoffDay,
   isHistoryEventRetained,
 } from './history-partitions';
+import { vessels } from './schema';
 
 export interface VesselSnapshotRow {
   id: string;
@@ -97,6 +98,14 @@ export interface PersistedVesselSummary {
   name: string | null;
 }
 
+type VesselSummaryRow = {
+  id: string;
+  mmsi: string;
+  imo: string | null;
+  name: string | null;
+};
+type DbTransaction = Parameters<Parameters<DbService['db']['transaction']>[0]>[0];
+
 @Injectable()
 export class VesselsRepository {
   constructor(
@@ -122,43 +131,64 @@ export class VesselsRepository {
     }
   }
 
-  /**
-   * Single transaction: upsert `vessels` (creating on first sight), upsert
-   * `vessel_positions_latest`, append to `vessel_positions_history`. The
-   * history insert is guarded by `(vessel_id, occurred_at)` uniqueness so a
-   * stream replay is a no-op rather than a duplicate row. Stale telemetry is
-   * filtered before the transaction so dropped events perform no DB writes.
-   */
   async upsertPosition(event: PositionEvent): Promise<PersistedVesselSummary | null> {
     const db = this.dbs.db;
     if (this.dropIfStaleTelemetry(event)) return null;
 
     const summary = await this.timed('vessels.upsertPosition', () =>
       db.transaction(async (tx) => {
-        const inserted = await tx.execute(sql`
-        INSERT INTO vessels (mmsi, name, updated_at)
-        VALUES (${event.mmsi}, ${event.shipName ?? null}, NOW())
-        ON CONFLICT (mmsi) DO UPDATE
-          SET name = COALESCE(vessels.name, EXCLUDED.name),
-              updated_at = NOW()
-        RETURNING id, mmsi, imo, name
-      `);
-        const row = (
-          inserted as unknown as Array<{
-            id: string;
-            mmsi: string;
-            imo: string | null;
-            name: string | null;
-          }>
-        )[0];
-        if (!row) throw new Error(`vessels upsert returned no row for mmsi=${event.mmsi}`);
+        const row = await this.upsertVesselFromPosition(tx, event);
+        await this.upsertLatestPosition(tx, row.id, event);
+        await this.insertPositionHistory(tx, row.id, event);
+        return this.toPersistedVesselSummary(row);
+      }),
+    );
+    this.writes.inc({ table: 'vessels' });
+    this.writes.inc({ table: 'vessel_positions_latest' });
+    this.writes.inc({ table: 'vessel_positions_history' });
+    return summary;
+  }
 
-        await tx.execute(sql`
+  private async upsertVesselFromPosition(
+    tx: DbTransaction,
+    event: PositionEvent,
+  ): Promise<VesselSummaryRow> {
+    const rows = await tx
+      .insert(vessels)
+      .values({
+        mmsi: event.mmsi,
+        name: event.shipName ?? null,
+        updatedAt: sql`NOW()`,
+      })
+      .onConflictDoUpdate({
+        target: vessels.mmsi,
+        set: {
+          name: sql`COALESCE(${vessels.name}, EXCLUDED.name)`,
+          updatedAt: sql`NOW()`,
+        },
+      })
+      .returning({
+        id: vessels.id,
+        mmsi: vessels.mmsi,
+        imo: vessels.imo,
+        name: vessels.name,
+      });
+    const row = rows[0];
+    if (!row) throw new Error(`vessels upsert returned no row for mmsi=${event.mmsi}`);
+    return row;
+  }
+
+  private async upsertLatestPosition(
+    tx: DbTransaction,
+    vesselId: string,
+    event: PositionEvent,
+  ): Promise<void> {
+    await tx.execute(sql`
         INSERT INTO vessel_positions_latest (
           vessel_id, mmsi, position, sog, cog, true_heading, nav_status, rate_of_turn, occurred_at, last_seen_at
         )
         VALUES (
-          ${row.id},
+          ${vesselId},
           ${event.mmsi},
           ST_SetSRID(ST_MakePoint(${event.lon}, ${event.lat}), 4326),
           ${event.sog ?? null},
@@ -180,13 +210,19 @@ export class VesselsRepository {
               last_seen_at = NOW()
           WHERE vessel_positions_latest.occurred_at <= EXCLUDED.occurred_at
       `);
+  }
 
-        await tx.execute(sql`
+  private async insertPositionHistory(
+    tx: DbTransaction,
+    vesselId: string,
+    event: PositionEvent,
+  ): Promise<void> {
+    await tx.execute(sql`
           INSERT INTO vessel_positions_history (
             vessel_id, mmsi, position, sog, cog, true_heading, nav_status, rate_of_turn, occurred_at
           )
           VALUES (
-            ${row.id},
+            ${vesselId},
             ${event.mmsi},
             ST_SetSRID(ST_MakePoint(${event.lon}, ${event.lat}), 4326),
             ${event.sog ?? null},
@@ -198,19 +234,6 @@ export class VesselsRepository {
           )
           ON CONFLICT (vessel_id, occurred_at) DO NOTHING
         `);
-
-        return {
-          vesselId: row.id,
-          mmsi: row.mmsi,
-          imo: row.imo,
-          name: row.name,
-        };
-      }),
-    );
-    this.writes.inc({ table: 'vessels' });
-    this.writes.inc({ table: 'vessel_positions_latest' });
-    this.writes.inc({ table: 'vessel_positions_history' });
-    return summary;
   }
 
   async findTrack(
@@ -288,59 +311,54 @@ export class VesselsRepository {
     return { kind: 'points', points };
   }
 
-  /**
-   * Upserts profile fields onto `vessels` from a static event. Existing
-   * non-null values are preserved when the incoming field is null (COALESCE
-   * over EXCLUDED), so a partial Type 24 Part-A message does not erase
-   * IMO/dimensions previously learned from a Type 5.
-   */
   async upsertProfile(event: StaticEvent): Promise<PersistedVesselSummary | null> {
     if (this.dropIfStaleTelemetry(event)) return null;
 
     const rows = await this.timed('vessels.upsertProfile', () =>
-      this.dbs.db.execute(sql`
-      INSERT INTO vessels (
-        mmsi, imo, name, call_sign, ship_type, destination,
-        dimension_to_bow, dimension_to_stern, dimension_to_port, dimension_to_starboard,
-        updated_at
-      )
-      VALUES (
-        ${event.mmsi},
-        ${event.imo ?? null},
-        ${event.name ?? null},
-        ${event.callSign ?? null},
-        ${event.shipType ?? null},
-        ${event.destination ?? null},
-        ${event.dimensionToBow ?? null},
-        ${event.dimensionToStern ?? null},
-        ${event.dimensionToPort ?? null},
-        ${event.dimensionToStarboard ?? null},
-        NOW()
-      )
-      ON CONFLICT (mmsi) DO UPDATE
-        SET imo                    = COALESCE(EXCLUDED.imo,                    vessels.imo),
-            name                   = COALESCE(EXCLUDED.name,                   vessels.name),
-            call_sign              = COALESCE(EXCLUDED.call_sign,              vessels.call_sign),
-            ship_type              = COALESCE(EXCLUDED.ship_type,              vessels.ship_type),
-            destination            = COALESCE(EXCLUDED.destination,            vessels.destination),
-            dimension_to_bow       = COALESCE(EXCLUDED.dimension_to_bow,       vessels.dimension_to_bow),
-            dimension_to_stern     = COALESCE(EXCLUDED.dimension_to_stern,     vessels.dimension_to_stern),
-            dimension_to_port      = COALESCE(EXCLUDED.dimension_to_port,      vessels.dimension_to_port),
-            dimension_to_starboard = COALESCE(EXCLUDED.dimension_to_starboard, vessels.dimension_to_starboard),
-            updated_at             = NOW()
-      RETURNING id, mmsi, imo, name
-    `),
+      this.dbs.db
+        .insert(vessels)
+        .values({
+          mmsi: event.mmsi,
+          imo: event.imo ?? null,
+          name: event.name ?? null,
+          callSign: event.callSign ?? null,
+          shipType: event.shipType ?? null,
+          destination: event.destination ?? null,
+          dimensionToBow: event.dimensionToBow ?? null,
+          dimensionToStern: event.dimensionToStern ?? null,
+          dimensionToPort: event.dimensionToPort ?? null,
+          dimensionToStarboard: event.dimensionToStarboard ?? null,
+          updatedAt: sql`NOW()`,
+        })
+        .onConflictDoUpdate({
+          target: vessels.mmsi,
+          set: {
+            imo: sql`COALESCE(EXCLUDED.imo, ${vessels.imo})`,
+            name: sql`COALESCE(EXCLUDED.name, ${vessels.name})`,
+            callSign: sql`COALESCE(EXCLUDED.call_sign, ${vessels.callSign})`,
+            shipType: sql`COALESCE(EXCLUDED.ship_type, ${vessels.shipType})`,
+            destination: sql`COALESCE(EXCLUDED.destination, ${vessels.destination})`,
+            dimensionToBow: sql`COALESCE(EXCLUDED.dimension_to_bow, ${vessels.dimensionToBow})`,
+            dimensionToStern: sql`COALESCE(EXCLUDED.dimension_to_stern, ${vessels.dimensionToStern})`,
+            dimensionToPort: sql`COALESCE(EXCLUDED.dimension_to_port, ${vessels.dimensionToPort})`,
+            dimensionToStarboard: sql`COALESCE(EXCLUDED.dimension_to_starboard, ${vessels.dimensionToStarboard})`,
+            updatedAt: sql`NOW()`,
+          },
+        })
+        .returning({
+          id: vessels.id,
+          mmsi: vessels.mmsi,
+          imo: vessels.imo,
+          name: vessels.name,
+        }),
     );
-    const row = (
-      rows as unknown as Array<{
-        id: string;
-        mmsi: string;
-        imo: string | null;
-        name: string | null;
-      }>
-    )[0];
+    const row = rows[0];
     if (!row) throw new Error(`vessels profile upsert returned no row for mmsi=${event.mmsi}`);
     this.writes.inc({ table: 'vessels' });
+    return this.toPersistedVesselSummary(row);
+  }
+
+  private toPersistedVesselSummary(row: VesselSummaryRow): PersistedVesselSummary {
     return {
       vesselId: row.id,
       mmsi: row.mmsi,

@@ -47,12 +47,13 @@ describe('VesselsRepository', () => {
     txExecute: jest.Mock,
     historyDropped = stubCounter(),
     logger = stubPinoLogger(),
-    dbExecute = jest.fn(),
+    txInsert = jest.fn(),
+    dbInsert = jest.fn(),
   ) {
     const dbs = {
       db: {
-        execute: dbExecute,
-        transaction: jest.fn(async (cb) => cb({ execute: txExecute })),
+        insert: dbInsert,
+        transaction: jest.fn(async (cb) => cb({ execute: txExecute, insert: txInsert })),
       },
     };
     const config = {
@@ -69,6 +70,14 @@ describe('VesselsRepository', () => {
       historyDropped,
       logger,
     );
+  }
+
+  function insertReturningMock(rows: unknown[]) {
+    const returning = jest.fn().mockResolvedValue(rows);
+    const onConflictDoUpdate = jest.fn(() => ({ returning }));
+    const values = jest.fn(() => ({ onConflictDoUpdate }));
+    const insert = jest.fn(() => ({ values }));
+    return { insert, values, onConflictDoUpdate, returning };
   }
 
   it('drops stale position telemetry before any DB write', async () => {
@@ -124,20 +133,22 @@ describe('VesselsRepository', () => {
   it('writes history for events inside retention', async () => {
     const historyDropped = stubCounter();
     const droppedSpy = jest.spyOn(historyDropped, 'inc');
-    const txExecute = jest
-      .fn()
-      .mockResolvedValueOnce([
-        {
-          id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-          mmsi: '241935000',
-          imo: '9187629',
-          name: 'SEA MOON',
-        },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    const txExecute = jest.fn().mockResolvedValue([]);
+    const vesselInsert = insertReturningMock([
+      {
+        id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        mmsi: '241935000',
+        imo: '9187629',
+        name: 'SEA MOON',
+      },
+    ]);
 
-    const result = await repo(txExecute, historyDropped).upsertPosition(
+    const result = await repo(
+      txExecute,
+      historyDropped,
+      stubPinoLogger(),
+      vesselInsert.insert,
+    ).upsertPosition(
       positionEvent({ occurredAt: new Date().toISOString() }),
     );
 
@@ -147,16 +158,21 @@ describe('VesselsRepository', () => {
       imo: '9187629',
       name: 'SEA MOON',
     });
-    expect(txExecute).toHaveBeenCalledTimes(3);
+    expect(vesselInsert.insert).toHaveBeenCalledTimes(1);
+    expect(vesselInsert.returning).toHaveBeenCalledTimes(1);
+    expect(txExecute).toHaveBeenCalledTimes(2);
     expect(dialect.sqlToQuery(txExecute.mock.calls[0]![0]).sql).toMatch(
-      /RETURNING id, mmsi, imo, name/i,
+      /WHERE vessel_positions_latest\.occurred_at <= EXCLUDED\.occurred_at/i,
+    );
+    expect(dialect.sqlToQuery(txExecute.mock.calls[1]![0]).sql).toMatch(
+      /ON CONFLICT \(vessel_id, occurred_at\) DO NOTHING/i,
     );
     expect(droppedSpy).not.toHaveBeenCalled();
   });
 
   it('returns the merged persisted vessel summary for static profile upserts', async () => {
     const txExecute = jest.fn();
-    const dbExecute = jest.fn().mockResolvedValueOnce([
+    const vesselInsert = insertReturningMock([
       {
         id: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
         mmsi: '241935000',
@@ -165,7 +181,13 @@ describe('VesselsRepository', () => {
       },
     ]);
 
-    const result = await repo(txExecute, stubCounter(), stubPinoLogger(), dbExecute).upsertProfile(
+    const result = await repo(
+      txExecute,
+      stubCounter(),
+      stubPinoLogger(),
+      jest.fn(),
+      vesselInsert.insert,
+    ).upsertProfile(
       staticEvent({ occurredAt: new Date().toISOString() }),
     );
 
@@ -176,9 +198,16 @@ describe('VesselsRepository', () => {
       name: 'SEA MOON',
     });
     expect(txExecute).not.toHaveBeenCalled();
-    expect(dbExecute).toHaveBeenCalledTimes(1);
-    expect(dialect.sqlToQuery(dbExecute.mock.calls[0]![0]).sql).toMatch(
-      /RETURNING id, mmsi, imo, name/i,
+    expect(vesselInsert.insert).toHaveBeenCalledTimes(1);
+    expect(vesselInsert.onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({
+          imo: expect.any(Object),
+          name: expect.any(Object),
+          updatedAt: expect.any(Object),
+        }),
+      }),
     );
+    expect(vesselInsert.returning).toHaveBeenCalledTimes(1);
   });
 });
