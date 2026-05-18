@@ -826,7 +826,7 @@ When a task is completed, check it off in the same PR.
 - [x] Configure integration tests to run on main/master and manual dispatch,
       not required PR CI initially.
 - [x] Verify PR CI is green.
-- [ ] Verify push-to-main/master CI is green.
+- [x] Verify push-to-main/master CI is green.
 
 ### Phase 2 - Production Docker Images
 
