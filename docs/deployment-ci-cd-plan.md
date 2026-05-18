@@ -295,6 +295,12 @@ not required on every PR initially. Run them on pushes to `main`/`master` and
 through manual workflow dispatch. They can become required on PRs later if
 runtime and stability are acceptable.
 
+Note: the frontend currently imports shared contract source from
+`../src/contracts`, so the frontend CI job installs root dependencies before
+running web-scoped commands. Future improvement: extract shared contracts into a
+proper workspace package such as `@ais/contracts`, so backend and frontend
+depend on it explicitly instead of importing source across package boundaries.
+
 ### Main/Master Workflow
 
 Pushes to `main` or `master` should:
@@ -819,7 +825,7 @@ When a task is completed, check it off in the same PR.
 - [x] Run frontend install, typecheck, lint, test, build.
 - [x] Configure integration tests to run on main/master and manual dispatch,
       not required PR CI initially.
-- [ ] Verify PR CI is green.
+- [x] Verify PR CI is green.
 - [ ] Verify push-to-main/master CI is green.
 
 ### Phase 2 - Production Docker Images

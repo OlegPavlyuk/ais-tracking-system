@@ -70,6 +70,8 @@ jobs:
             web/pnpm-lock.yaml
 
       - name: Install root dependencies
+        # The web app imports shared contract source from ../src/contracts, so
+        # root dependencies such as zod must exist in a clean runner.
         run: pnpm install --frozen-lockfile
 
       - name: Install web dependencies
