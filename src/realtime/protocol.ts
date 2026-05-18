@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PositionEvent, StaticEvent, VesselEnrichedEvent } from '../contracts';
+import type { PositionEvent, StaticEvent, VesselEnrichedEvent } from '../contracts';
 
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('subscribe') }).strict(),

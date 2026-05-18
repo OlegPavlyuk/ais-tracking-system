@@ -26,12 +26,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@contracts": ["../src/contracts/index.ts"],
-      "@protocol": ["../src/realtime/protocol.ts"]
+      "@contracts": ["shared-src/contracts/index.ts", "../src/contracts/index.ts"],
+      "@protocol": ["shared-src/realtime/protocol.ts", "../src/realtime/protocol.ts"]
     },
 
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "vite.config.ts", "vitest.setup.ts"],
+  "include": ["src", "shared-src", "vite.config.ts", "vitest.setup.ts"],
   "references": []
 }

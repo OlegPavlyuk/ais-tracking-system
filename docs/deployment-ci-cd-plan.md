@@ -538,6 +538,7 @@ Commands to run locally:
 ```bash
 docker build -t ais-backend:test .
 docker build --target migrator -t ais-migrator:test .
+docker build -f web/Dockerfile -t ais-frontend:test .
 pnpm web:build
 ```
 
@@ -546,6 +547,9 @@ Risks / things to verify:
 - The migrator currently uses dev dependencies from the deps stage; verify this
   is acceptable or create a cleaner migrator image.
 - Alpine runtime package choices should support all production dependencies.
+- The frontend Docker build copies the currently required shared source into
+  `web/shared-src` during the image build. Future improvement: extract these
+  shared contracts into a proper package such as `@ais/contracts`.
 
 ### Phase 3 - Production Docker Compose
 
@@ -830,12 +834,12 @@ When a task is completed, check it off in the same PR.
 
 ### Phase 2 - Production Docker Images
 
-- [ ] Review backend runtime image for production suitability.
-- [ ] Confirm migrator image/stage behavior.
-- [ ] Add frontend production image or static build packaging.
-- [ ] Ensure images run without source mounts.
-- [ ] Ensure secrets are not baked into images.
-- [ ] Document local image build commands.
+- [x] Review backend runtime image for production suitability.
+- [x] Confirm migrator image/stage behavior.
+- [x] Add frontend production image or static build packaging.
+- [x] Ensure images run without source mounts.
+- [x] Ensure secrets are not baked into images.
+- [x] Document local image build commands.
 
 ### Phase 3 - Production Docker Compose
 

@@ -10,18 +10,20 @@ COPY src ./src
 RUN pnpm build && pnpm prune --prod
 
 FROM deps AS migrator
+ENV NODE_ENV=production
 COPY tsconfig*.json drizzle.config.ts ./
 COPY src ./src
 COPY drizzle ./drizzle
 COPY scripts ./scripts
-CMD ["sh", "-c", "pnpm migrate && pnpm partition:maintain"]
+CMD ["sh", "-c", "test -n \"$DATABASE_URL\" && pnpm migrate && pnpm partition:maintain"]
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache wget
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY package.json ./
+COPY --chown=node:node --from=builder /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node package.json ./
+USER node
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
