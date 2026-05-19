@@ -511,3 +511,183 @@ gcloud compute ssh "$VM_NAME" --zone="$ZONE" --tunnel-through-iap
 
 Do not let IAP setup block this first VM bootstrap unless it is straightforward
 in your project.
+
+## 15. GitHub OIDC Deployment Setup
+
+The production deployment workflow is `.github/workflows/deploy.yml`. After CI
+succeeds on `main` or `master`, it builds and pushes SHA-tagged images, waits
+for approval on the GitHub `production` environment, then deploys those exact
+tags to the VM. It can also be run manually for an exact SHA.
+
+Images are pushed to:
+
+```text
+europe-central2-docker.pkg.dev/project-10228515-1338-4278-a31/ais-tracking-system/backend:<git-sha>
+europe-central2-docker.pkg.dev/project-10228515-1338-4278-a31/ais-tracking-system/migrator:<git-sha>
+europe-central2-docker.pkg.dev/project-10228515-1338-4278-a31/ais-tracking-system/frontend:<git-sha>
+```
+
+Prefer Workload Identity Federation instead of a JSON service account key.
+
+Create a GitHub deploy service account:
+
+```bash
+PROJECT_ID="project-10228515-1338-4278-a31"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+REGION="europe-central2"
+AR_REPOSITORY="ais-tracking-system"
+GITHUB_REPOSITORY="OlegPavlyuk/ais-tracking-system"
+GITHUB_POOL="github"
+GITHUB_PROVIDER="github-actions"
+GITHUB_DEPLOY_SERVICE_ACCOUNT="ais-github-deployer"
+GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL="$GITHUB_DEPLOY_SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
+
+gcloud iam service-accounts create "$GITHUB_DEPLOY_SERVICE_ACCOUNT" \
+  --project="$PROJECT_ID" \
+  --display-name="AIS GitHub deployer"
+```
+
+Grant least-privilege deployment permissions:
+
+```bash
+gcloud artifacts repositories add-iam-policy-binding "$AR_REPOSITORY" \
+  --project="$PROJECT_ID" \
+  --location="$REGION" \
+  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
+  --role="roles/artifactregistry.writer"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
+  --role="roles/compute.viewer"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
+  --role="roles/compute.osAdminLogin"
+```
+
+`roles/compute.osAdminLogin` is used so the deploy workflow can prepare
+`/opt/ais-tracking-system` and run Docker through `sudo` without requiring the
+GitHub OS Login user to be pre-added to the VM's `docker` group.
+
+If the workflow uses IAP, also grant:
+
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
+  --role="roles/iap.tunnelResourceAccessor"
+```
+
+Create the Workload Identity Pool and provider:
+
+```bash
+gcloud iam workload-identity-pools create "$GITHUB_POOL" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --display-name="GitHub Actions"
+
+gcloud iam workload-identity-pools providers create-oidc "$GITHUB_PROVIDER" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --workload-identity-pool="$GITHUB_POOL" \
+  --display-name="GitHub Actions OIDC" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
+  --attribute-condition="assertion.repository=='$GITHUB_REPOSITORY'"
+```
+
+Allow this repository to impersonate the deploy service account:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding "$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
+  --project="$PROJECT_ID" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$GITHUB_POOL/attribute.repository/$GITHUB_REPOSITORY"
+```
+
+Add these GitHub repository or environment secrets:
+
+```text
+GCP_WORKLOAD_IDENTITY_PROVIDER=projects/<project-number>/locations/global/workloadIdentityPools/github/providers/github-actions
+GCP_DEPLOY_SERVICE_ACCOUNT=ais-github-deployer@project-10228515-1338-4278-a31.iam.gserviceaccount.com
+```
+
+Add these GitHub `production` environment variables if your VM names differ
+from the workflow defaults:
+
+```text
+GCE_VM_NAME=ais-prod-vm
+GCE_ZONE=europe-central2-a
+GCE_APP_DIR=/opt/ais-tracking-system
+GCP_USE_IAP=true
+```
+
+In GitHub, create an environment named `production` and enable required
+reviewers. The deployment job will pause there before touching the VM.
+
+## 16. IAP For GitHub Deployments
+
+The deployment workflow defaults to `GCP_USE_IAP=true`. For that to work, the VM
+must allow SSH from Google's IAP TCP forwarding range:
+
+```bash
+gcloud compute firewall-rules create allow-ais-prod-ssh-iap \
+  --project="$PROJECT_ID" \
+  --network=default \
+  --direction=INGRESS \
+  --priority=1000 \
+  --action=ALLOW \
+  --rules=tcp:22 \
+  --source-ranges=35.235.240.0/20 \
+  --target-tags="$NETWORK_TAG_SSH"
+```
+
+Enable OS Login for the project or the VM:
+
+```bash
+gcloud compute project-info add-metadata \
+  --project="$PROJECT_ID" \
+  --metadata=enable-oslogin=TRUE
+```
+
+Test IAP SSH from your machine:
+
+```bash
+gcloud compute ssh "$VM_NAME" --zone="$ZONE" --tunnel-through-iap
+```
+
+## 17. Running A Deployment
+
+Automatic path:
+
+1. Push or merge to `main`.
+2. Wait for **CI** to succeed.
+3. Open the queued **Deploy** workflow run.
+4. Approve the `production` environment deployment.
+
+Manual path:
+
+1. Go to **GitHub** -> **Actions** -> **Deploy**.
+2. Click **Run workflow**.
+3. Leave `git_sha` empty to deploy the selected branch SHA, or enter an exact
+   commit SHA.
+4. Wait for image builds and pushes.
+5. Approve the `production` environment deployment.
+
+The VM deploy script writes:
+
+```text
+/opt/ais-tracking-system/.env.release
+/opt/ais-tracking-system/.deploy/releases/current.env
+/opt/ais-tracking-system/.deploy/releases/previous.env
+```
+
+The deployment fails loudly if image pull, migration, service restart, or smoke
+checks fail. If smoke checks fail and a previous release exists, the script
+attempts to roll containers back to the previous image metadata.
+
+Manual rollback command on the VM:
+
+```bash
+cd /opt/ais-tracking-system
+AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/rollback.sh --app-dir /opt/ais-tracking-system
+```

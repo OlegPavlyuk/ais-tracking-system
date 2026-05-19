@@ -1,0 +1,180 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - main
+      - master
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      git_sha:
+        description: Git SHA to deploy. Defaults to the workflow ref SHA.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: project-10228515-1338-4278-a31
+  GCP_REGION: europe-central2
+  ARTIFACT_REGISTRY_REPOSITORY: ais-tracking-system
+  IMAGE_REGISTRY: europe-central2-docker.pkg.dev/project-10228515-1338-4278-a31/ais-tracking-system
+  GCE_VM_NAME: ${{ vars.GCE_VM_NAME || 'ais-prod-vm' }}
+  GCE_ZONE: ${{ vars.GCE_ZONE || 'europe-central2-a' }}
+  GCE_APP_DIR: ${{ vars.GCE_APP_DIR || '/opt/ais-tracking-system' }}
+  GCP_USE_IAP: ${{ vars.GCP_USE_IAP || 'true' }}
+
+jobs:
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      deploy_sha: ${{ steps.version.outputs.deploy_sha }}
+      backend_image: ${{ steps.version.outputs.backend_image }}
+      migrator_image: ${{ steps.version.outputs.migrator_image }}
+      frontend_image: ${{ steps.version.outputs.frontend_image }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve deploy SHA
+        id: version
+        run: |
+          deploy_sha="$(git rev-parse HEAD)"
+          {
+            echo "deploy_sha=$deploy_sha"
+            echo "backend_image=$IMAGE_REGISTRY/backend:$deploy_sha"
+            echo "migrator_image=$IMAGE_REGISTRY/migrator:$deploy_sha"
+            echo "frontend_image=$IMAGE_REGISTRY/frontend:$deploy_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GCP_REGION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/backend:${{ steps.version.outputs.deploy_sha }}
+
+      - name: Build and push migrator
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: migrator
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/migrator:${{ steps.version.outputs.deploy_sha }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: web/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/frontend:${{ steps.version.outputs.deploy_sha }}
+
+  deploy:
+    name: Deploy to Production VM
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build-and-push.outputs.deploy_sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Copy deployment files to VM
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          scp_flags=(--zone "$GCE_ZONE" --project "$GCP_PROJECT_ID")
+          ssh_flags=(--zone "$GCE_ZONE" --project "$GCP_PROJECT_ID")
+
+          if [[ "$GCP_USE_IAP" == "true" ]]; then
+            scp_flags+=(--tunnel-through-iap)
+            ssh_flags+=(--tunnel-through-iap)
+          fi
+
+          gcloud compute ssh "$GCE_VM_NAME" "${ssh_flags[@]}" --command \
+            "sudo mkdir -p '$GCE_APP_DIR/scripts' '$GCE_APP_DIR/docker' && sudo chown -R \"\$(id -u):\$(id -g)\" '$GCE_APP_DIR'"
+
+          gcloud compute scp "${scp_flags[@]}" \
+            docker-compose.prod.yml \
+            docker-compose.prod.grafana-local.yml \
+            "$GCE_VM_NAME:$GCE_APP_DIR/"
+
+          gcloud compute scp --recurse "${scp_flags[@]}" \
+            docker \
+            scripts \
+            "$GCE_VM_NAME:$GCE_APP_DIR/"
+
+      - name: Deploy release on VM
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ needs.build-and-push.outputs.deploy_sha }}
+        run: |
+          set -euo pipefail
+
+          ssh_flags=(--zone "$GCE_ZONE" --project "$GCP_PROJECT_ID")
+
+          if [[ "$GCP_USE_IAP" == "true" ]]; then
+            ssh_flags+=(--tunnel-through-iap)
+          fi
+
+          remote_command="cd '$GCE_APP_DIR' && chmod +x scripts/deploy/deploy.sh scripts/deploy/smoke-check.sh scripts/deploy/rollback.sh && AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/deploy.sh --sha '$DEPLOY_SHA' --registry '$IMAGE_REGISTRY' --app-dir '$GCE_APP_DIR'"
+
+          gcloud compute ssh "$GCE_VM_NAME" "${ssh_flags[@]}" --command "$remote_command"
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Production deployment"
+            echo ""
+            echo "- SHA: \`${{ needs.build-and-push.outputs.deploy_sha }}\`"
+            echo "- Backend: \`${{ needs.build-and-push.outputs.backend_image }}\`"
+            echo "- Migrator: \`${{ needs.build-and-push.outputs.migrator_image }}\`"
+            echo "- Frontend: \`${{ needs.build-and-push.outputs.frontend_image }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

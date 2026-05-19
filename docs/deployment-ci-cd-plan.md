@@ -899,15 +899,15 @@ When a task is completed, check it off in the same PR.
 
 ### Phase 6 - CD Workflow
 
-- [ ] Add deploy workflow.
-- [ ] Build and push SHA-tagged images.
-- [ ] Configure GitHub Environment manual approval.
-- [ ] Deploy exact image tags to VM.
-- [ ] Run migrator during deployment.
-- [ ] Restart production stack.
-- [ ] Run smoke checks.
-- [ ] Record current and previous deployed SHAs.
-- [ ] Document rollback command/path.
+- [x] Add deploy workflow.
+- [x] Build and push SHA-tagged images.
+- [x] Configure GitHub Environment manual approval.
+- [x] Deploy exact image tags to VM.
+- [x] Run migrator during deployment.
+- [x] Restart production stack.
+- [x] Run smoke checks.
+- [x] Record current and previous deployed SHAs.
+- [x] Document rollback command/path.
 - [ ] Verify approved deployment updates VM safely.
 
 ### Phase 7 - Backups, Restore, and Operations
