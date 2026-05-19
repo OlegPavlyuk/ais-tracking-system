@@ -639,12 +639,15 @@ Commands to run:
 curl -i http://localhost/
 curl -i http://localhost/api/vessels?limit=1
 curl -i http://localhost/metrics
+curl -i http://localhost/admin
 ```
 
 Risks / things to verify:
 - Nginx path rewriting for `/api` must preserve the backend's expected routes.
 - WebSocket proxy headers and timeouts must be correct.
 - Frontend asset fallback should support client-side routing if added later.
+- This phase is HTTP-only and uses `server_name _`; domain-specific server names
+  and HTTPS/TLS are intentionally deferred to Phase 8.
 
 ### Phase 5 - GCP VM Bootstrap and Runbook
 
@@ -867,17 +870,17 @@ When a task is completed, check it off in the same PR.
 
 ### Phase 4 - Nginx Reverse Proxy
 
-- [ ] Add Nginx config.
-- [ ] Serve frontend at `/`.
-- [ ] Proxy `/api` to API service.
-- [ ] Proxy `/ws/positions` to API service.
-- [ ] Configure WebSocket upgrade headers.
-- [ ] Configure WebSocket-friendly timeouts.
-- [ ] Block public `/metrics`.
-- [ ] Expose public `/healthz` and `/readyz`.
-- [ ] Block public `/admin`.
-- [ ] Verify frontend/API/WebSocket through one HTTP entrypoint.
-- [ ] Add notes for future domain/HTTPS changes.
+- [x] Add Nginx config.
+- [x] Serve frontend at `/`.
+- [x] Proxy `/api` to API service.
+- [x] Proxy `/ws/positions` to API service.
+- [x] Configure WebSocket upgrade headers.
+- [x] Configure WebSocket-friendly timeouts.
+- [x] Block public `/metrics`.
+- [x] Expose public `/healthz` and `/readyz`.
+- [x] Block public `/admin`.
+- [x] Verify frontend/API/WebSocket through one HTTP entrypoint.
+- [x] Add notes for future domain/HTTPS changes.
 
 ### Phase 5 - GCP VM Bootstrap and Runbook
 
