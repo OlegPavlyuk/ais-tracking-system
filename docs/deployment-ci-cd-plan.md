@@ -884,17 +884,17 @@ When a task is completed, check it off in the same PR.
 
 ### Phase 5 - GCP VM Bootstrap and Runbook
 
-- [ ] Document GCP project setup.
-- [ ] Document required API enablement.
-- [ ] Document Artifact Registry creation.
-- [ ] Document static IP reservation.
-- [ ] Document Compute Engine VM creation.
-- [ ] Document firewall rules.
-- [ ] Document service accounts and IAM.
-- [ ] Document Docker installation.
-- [ ] Document Artifact Registry pull auth from VM.
-- [ ] Document production env file handling.
-- [ ] Document private Grafana access method.
+- [x] Document GCP project setup.
+- [x] Document required API enablement.
+- [x] Document Artifact Registry creation.
+- [x] Document static IP reservation.
+- [x] Document Compute Engine VM creation.
+- [x] Document firewall rules.
+- [x] Document service accounts and IAM.
+- [x] Document Docker installation.
+- [x] Document Artifact Registry pull auth from VM.
+- [x] Document production env file handling.
+- [x] Document private Grafana access method.
 - [ ] Verify a fresh VM can be prepared from the runbook.
 
 ### Phase 6 - CD Workflow
