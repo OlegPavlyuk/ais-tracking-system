@@ -1,0 +1,156 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '5'
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  PORT: 3000
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://${POSTGRES_USER:-ais}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-ais}
+  REDIS_URL: redis://redis:6379
+  ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
+  AIS_PROVIDERS: ${AIS_PROVIDERS:-}
+  AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
+  METRICS_ENABLED: ${METRICS_ENABLED:-true}
+  HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-7}
+  HISTORY_PRECREATE_DAYS: ${HISTORY_PRECREATE_DAYS:-7}
+  HISTORY_PARTITION_MAINTENANCE_ENABLED: ${HISTORY_PARTITION_MAINTENANCE_ENABLED:-true}
+  WS_SEND_QUEUE_MAX: ${WS_SEND_QUEUE_MAX:-256}
+  WS_BUFFERED_AMOUNT_LIMIT_BYTES: ${WS_BUFFERED_AMOUNT_LIMIT_BYTES:-1048576}
+  WS_HEARTBEAT_INTERVAL_MS: ${WS_HEARTBEAT_INTERVAL_MS:-30000}
+
+x-backend-service: &backend-service
+  image: ${AIS_BACKEND_IMAGE:-ais-backend:test}
+  restart: unless-stopped
+  logging: *default-logging
+  expose:
+    - '3000'
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+  healthcheck:
+    test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/healthz || exit 1']
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgis/postgis:16-3.4}
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ais}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-ais}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --appendfsync
+      - everysec
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    image: ${AIS_MIGRATOR_IMAGE:-ais-migrator:test}
+    restart: 'no'
+    logging: *default-logging
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ais}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-ais}
+      HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-7}
+      HISTORY_PRECREATE_DAYS: ${HISTORY_PRECREATE_DAYS:-7}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *backend-service
+    environment:
+      <<: *backend-env
+      PROCESS_ROLE: api
+
+  ingestion:
+    <<: *backend-service
+    environment:
+      <<: *backend-env
+      PROCESS_ROLE: ingestion
+
+  worker:
+    <<: *backend-service
+    environment:
+      <<: *backend-env
+      PROCESS_ROLE: worker
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - ./docker/prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      api:
+        condition: service_started
+      ingestion:
+        condition: service_started
+      worker:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:9090/-/healthy']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.3.1}
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/api/health || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

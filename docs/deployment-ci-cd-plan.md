@@ -570,6 +570,7 @@ Implement:
 - prefer Prometheus scraping `api`, `ingestion`, and `worker`;
 - remove public DB/Redis ports;
 - add restart policies;
+- add Docker log rotation defaults;
 - add health checks;
 - wire image tags through env variables rather than local builds;
 - keep local development Compose untouched unless needed.
@@ -577,6 +578,8 @@ Implement:
 Acceptance criteria:
 - production Compose stack can run locally or in a VM-like environment;
 - public-facing service is only Nginx once Phase 4 is complete;
+- this Compose file is not publicly complete until Phase 4 adds the public
+  Nginx entrypoint;
 - DB and Redis are reachable only on the private Docker network;
 - `api`, `ingestion`, and `worker` use the same image with different
   `PROCESS_ROLE` values.
@@ -584,9 +587,9 @@ Acceptance criteria:
 Commands to run:
 
 ```bash
-docker compose -f docker-compose.prod.yml config
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml ps
+docker compose --env-file .env.production.example -f docker-compose.prod.yml config
+docker compose --env-file .env.production.example -f docker-compose.prod.yml up -d
+docker compose --env-file .env.production.example -f docker-compose.prod.yml ps
 ```
 
 Risks / things to verify:
@@ -594,6 +597,9 @@ Risks / things to verify:
   fixture data.
 - If multiple roles expose `/metrics`, decide whether Prometheus scrapes all
   role containers or only API initially.
+- Values named `change-me` in `.env.production.example` are local placeholders
+  only. Replace them with strong secrets in `.env.production` on the VM and do
+  not commit that file.
 - Ensure service startup ordering does not pretend to guarantee application
   readiness beyond health checks.
 
@@ -843,20 +849,21 @@ When a task is completed, check it off in the same PR.
 
 ### Phase 3 - Production Docker Compose
 
-- [ ] Add `docker-compose.prod.yml`.
-- [ ] Add `api` service with `PROCESS_ROLE=api`.
-- [ ] Add `ingestion` service with `PROCESS_ROLE=ingestion`.
-- [ ] Add `worker` service with `PROCESS_ROLE=worker`.
-- [ ] Add one-shot `migrate` service.
-- [ ] Add Postgres persistent volume.
-- [ ] Add Redis AOF persistent volume.
-- [ ] Add private Prometheus service.
-- [ ] Configure Prometheus to prefer scraping `api`, `ingestion`, and `worker`.
-- [ ] Add private Grafana service.
-- [ ] Remove public DB/Redis ports.
-- [ ] Add restart policies.
-- [ ] Add health checks.
-- [ ] Validate production Compose config.
+- [x] Add `docker-compose.prod.yml`.
+- [x] Add `api` service with `PROCESS_ROLE=api`.
+- [x] Add `ingestion` service with `PROCESS_ROLE=ingestion`.
+- [x] Add `worker` service with `PROCESS_ROLE=worker`.
+- [x] Add one-shot `migrate` service.
+- [x] Add Postgres persistent volume.
+- [x] Add Redis AOF persistent volume.
+- [x] Add private Prometheus service.
+- [x] Configure Prometheus to prefer scraping `api`, `ingestion`, and `worker`.
+- [x] Add private Grafana service.
+- [x] Remove public DB/Redis ports.
+- [x] Add restart policies.
+- [x] Add Docker log rotation defaults.
+- [x] Add health checks.
+- [x] Validate production Compose config.
 
 ### Phase 4 - Nginx Reverse Proxy
 
