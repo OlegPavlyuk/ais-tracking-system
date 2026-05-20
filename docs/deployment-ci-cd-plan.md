@@ -908,19 +908,19 @@ When a task is completed, check it off in the same PR.
 - [x] Run smoke checks.
 - [x] Record current and previous deployed SHAs.
 - [x] Document rollback command/path.
-- [ ] Verify approved deployment updates VM safely.
+- [x] Verify approved deployment updates VM safely.
 
 ### Phase 7 - Backups, Restore, and Operations
 
-- [ ] Add Postgres backup procedure.
-- [ ] Add Redis backup/recovery procedure.
-- [ ] Document optional private GCS backup upload.
-- [ ] Document Postgres restore drill.
-- [ ] Document Redis restore/recovery expectations.
-- [ ] Document log inspection.
-- [ ] Document health checks.
-- [ ] Document disk usage checks.
-- [ ] Document rollback procedure.
+- [x] Add Postgres backup procedure.
+- [x] Add Redis backup/recovery procedure.
+- [x] Document optional private GCS backup upload.
+- [x] Document Postgres restore drill.
+- [x] Document Redis restore/recovery expectations.
+- [x] Document log inspection.
+- [x] Document health checks.
+- [x] Document disk usage checks.
+- [x] Document rollback procedure.
 - [ ] Manually test backup and restore procedure where practical.
 
 ### Phase 8 - Domain and HTTPS

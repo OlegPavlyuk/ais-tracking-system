@@ -107,8 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-and-push
-    environment:
-      name: production
+    environment: production
 
     steps:
       - name: Checkout
