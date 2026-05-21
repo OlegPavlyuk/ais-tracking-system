@@ -14,6 +14,14 @@ describe('ConfigService', () => {
     expect(config.get('LOG_LEVEL')).toBe('info');
     expect(config.get('METRICS_ENABLED')).toBe(true);
     expect(config.get('AIS_PROVIDERS')).toEqual(['aisstream']);
+    expect(config.get('GEO_VALIDATION_ENABLED')).toBe(true);
+    expect(config.get('GEO_VALIDATION_FAIL_OPEN')).toBe(true);
+    expect(config.get('GEO_COASTAL_TOLERANCE_METERS')).toBe(500);
+    expect(config.get('GEO_COVERAGE_MARGIN_KM')).toBe(50);
+    expect(config.get('GEO_CACHE_ENABLED')).toBe(true);
+    expect(config.get('GEO_CACHE_PRECISION')).toBe(4);
+    expect(config.get('GEO_CACHE_TTL_SECONDS')).toBe(7 * 24 * 60 * 60);
+    expect(config.get('GEO_CACHE_UNCERTAIN_TTL_SECONDS')).toBe(30 * 60);
     expect(config.get('WS_SEND_QUEUE_MAX')).toBe(256);
     expect(config.get('WS_BUFFERED_AMOUNT_LIMIT_BYTES')).toBe(1024 * 1024);
     expect(config.get('WS_HEARTBEAT_INTERVAL_MS')).toBe(30_000);
@@ -60,5 +68,44 @@ describe('ConfigService', () => {
       METRICS_ENABLED: 'false',
     } as NodeJS.ProcessEnv);
     expect(config.get('METRICS_ENABLED')).toBe(false);
+  });
+
+  it('parses geo boolean flags', () => {
+    const config = new ConfigService({
+      ...validEnv,
+      GEO_VALIDATION_ENABLED: 'false',
+      GEO_VALIDATION_FAIL_OPEN: 'false',
+      GEO_CACHE_ENABLED: 'false',
+    } as NodeJS.ProcessEnv);
+    expect(config.get('GEO_VALIDATION_ENABLED')).toBe(false);
+    expect(config.get('GEO_VALIDATION_FAIL_OPEN')).toBe(false);
+    expect(config.get('GEO_CACHE_ENABLED')).toBe(false);
+  });
+
+  it('throws when geo boolean flags are invalid', () => {
+    expect(
+      () =>
+        new ConfigService({
+          ...validEnv,
+          GEO_VALIDATION_ENABLED: 'sometimes',
+        } as NodeJS.ProcessEnv),
+    ).toThrow(/GEO_VALIDATION_ENABLED/);
+  });
+
+  it('throws when geo numeric settings are invalid', () => {
+    expect(
+      () =>
+        new ConfigService({
+          ...validEnv,
+          GEO_CACHE_PRECISION: '-1',
+        } as NodeJS.ProcessEnv),
+    ).toThrow(/GEO_CACHE_PRECISION/);
+    expect(
+      () =>
+        new ConfigService({
+          ...validEnv,
+          GEO_COASTAL_TOLERANCE_METERS: '0',
+        } as NodeJS.ProcessEnv),
+    ).toThrow(/GEO_COASTAL_TOLERANCE_METERS/);
   });
 });

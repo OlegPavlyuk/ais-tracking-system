@@ -839,10 +839,10 @@ What to build:
 
 Acceptance criteria:
 
-- [ ] Config tests cover defaults and invalid values.
-- [ ] Metrics module exposes geo metric providers.
-- [ ] `PipelineModule` can import `GeoModule` without circular dependencies.
-- [ ] Lint/typecheck pass.
+- [x] Config tests cover defaults and invalid values.
+- [x] Metrics module exposes geo metric providers.
+- [x] `PipelineModule` can import `GeoModule` without circular dependencies.
+- [x] Lint/typecheck pass.
 
 ### Phase 2 - PostGIS Schema, SQL Function, And Fixture Tests
 
@@ -973,10 +973,10 @@ committing.
 ## Progress Tracker
 
 - [x] Planning doc approved.
-- [ ] Config added.
-- [ ] Geo metric names/providers added.
-- [ ] Drop reasons added.
-- [ ] Geo module skeleton added.
+- [x] Config added.
+- [x] Geo metric names/providers added.
+- [x] Drop reasons added.
+- [x] Geo module skeleton added.
 - [ ] Geo schema migrated.
 - [ ] SQL function implemented.
 - [ ] SQL integration fixtures added.
