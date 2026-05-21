@@ -911,11 +911,11 @@ What to build:
 
 Acceptance criteria:
 
-- [ ] Static events bypass geo validation.
-- [ ] Position events call geo validation only after bbox passes.
-- [ ] Rejected deep-land positions are not published to `ais.events.v1`.
-- [ ] Sampler is not called for rejected deep-land positions.
-- [ ] Existing dedup/sampler tests remain valid or are updated.
+- [x] Static events bypass geo validation.
+- [x] Position events call geo validation only after bbox passes.
+- [x] Rejected deep-land positions are not published to `ais.events.v1`.
+- [x] Sampler is not called for rejected deep-land positions.
+- [x] Existing dedup/sampler tests remain valid or are updated.
 
 ### Phase 6 - Observability And Grafana
 
@@ -988,7 +988,7 @@ committing.
 - [x] Geo repository implemented.
 - [x] Redis cache implemented.
 - [x] Geo validation service implemented.
-- [ ] Pipeline wired.
+- [x] Pipeline wired.
 - [x] Metrics/logs added.
 - [ ] Grafana panels added.
 - [ ] Integration tests passing.
@@ -1012,6 +1012,10 @@ committing.
   `geo_validation_error` can be mapped cleanly by the pipeline.
 - Phase 4 records active dataset version as a single info-style gauge label by
   removing the previous version label when a new active version is observed.
+- Phase 5 wires geo validation into `IngestionPipelineService` immediately after
+  bbox filtering and before sampling. Static events bypass geo validation;
+  `reject/deep_land` drops as `on_land`; fail-closed `geo_validation_error`
+  drops as `geo_validation_error`; `uncertain/coastal_tolerance` continues.
 
 ---
 
