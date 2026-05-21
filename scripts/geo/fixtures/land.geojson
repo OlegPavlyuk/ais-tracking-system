@@ -1,0 +1,24 @@
+{
+  "type": "FeatureCollection",
+  "name": "phase3_fixture_land",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "phase3-fixture-land"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [30.0, 45.0],
+            [30.1, 45.0],
+            [30.1, 45.1],
+            [30.0, 45.1],
+            [30.0, 45.0]
+          ]
+        ]
+      }
+    }
+  ]
+}

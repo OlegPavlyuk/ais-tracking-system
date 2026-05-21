@@ -876,11 +876,11 @@ What to build:
 
 Acceptance criteria:
 
-- [ ] Import works on fresh DB.
-- [ ] Import can be safely rerun.
-- [ ] New version activates only after successful import.
-- [ ] Failed import leaves old version active.
-- [ ] Runtime app container remains free of GDAL dependency.
+- [x] Import works on fresh DB.
+- [x] Import can be safely rerun.
+- [x] New version activates only after successful import.
+- [x] Failed import leaves old version active.
+- [x] Runtime app container remains free of GDAL dependency.
 
 ### Phase 4 - Geo Runtime Services
 
@@ -980,11 +980,11 @@ committing.
 - [x] Geo schema migrated.
 - [x] SQL function implemented.
 - [x] SQL integration fixtures added.
-- [ ] Dataset metadata file added.
-- [ ] Import tooling implemented.
-- [ ] Manual overrides directory added.
-- [ ] Manual overrides imported.
-- [ ] Dataset active-version swap implemented.
+- [x] Dataset metadata file added.
+- [x] Import tooling implemented.
+- [x] Manual overrides directory added.
+- [x] Manual overrides imported.
+- [x] Dataset active-version swap implemented.
 - [ ] Geo repository implemented.
 - [ ] Redis cache implemented.
 - [ ] Geo validation service implemented.
@@ -1000,6 +1000,13 @@ committing.
 
 - Phase 2 migration and fixture integration tests were verified against a fresh
   Testcontainers PostGIS database after Docker was enabled locally.
+- Phase 3 import tooling defaults to a GDAL/`ogr2ogr` staging loader, while the
+  integration tests use a PostGIS GeoJSON fallback because `ogr2ogr` is not
+  installed in the local runtime. The normal application Docker runtime still
+  has no GDAL dependency.
+- Phase 3 intentionally pins tiny repo-owned fixture GeoJSON datasets in
+  `scripts/geo/datasets.json` to validate import lifecycle behavior before
+  large OSMData/Geofabrik imports are introduced during real data tuning.
 
 ---
 

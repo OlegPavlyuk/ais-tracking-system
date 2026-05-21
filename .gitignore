@@ -10,3 +10,4 @@ coverage
 .pnpm-store
 .idea
 .vscode
+.geo-import
