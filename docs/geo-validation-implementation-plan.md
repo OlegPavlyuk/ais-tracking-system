@@ -927,11 +927,11 @@ What to build:
 
 Acceptance criteria:
 
-- [ ] Deep-land reject counter visible.
-- [ ] Geo validation error counter visible.
-- [ ] Cache hit ratio visible.
-- [ ] PostGIS validation latency visible.
-- [ ] Active dataset version visible with controlled cardinality.
+- [x] Deep-land reject counter visible.
+- [x] Geo validation error counter visible.
+- [x] Cache hit ratio visible.
+- [x] PostGIS validation latency visible.
+- [x] Active dataset version visible with controlled cardinality.
 
 ### Phase 7 - Real Data Tuning
 
@@ -990,7 +990,7 @@ committing.
 - [x] Geo validation service implemented.
 - [x] Pipeline wired.
 - [x] Metrics/logs added.
-- [ ] Grafana panels added.
+- [x] Grafana panels added.
 - [ ] Integration tests passing.
 - [ ] Runtime container verified without GDAL.
 - [ ] First dataset bootstrap tested.
@@ -1016,6 +1016,10 @@ committing.
   bbox filtering and before sampling. Static events bypass geo validation;
   `reject/deep_land` drops as `on_land`; fail-closed `geo_validation_error`
   drops as `geo_validation_error`; `uncertain/coastal_tolerance` continues.
+- Phase 6 adds a dedicated Grafana **Geo Validation** dashboard section and an
+  operations runbook note for rollout/tuning panels. The active dataset panel
+  uses the controlled `version` label exposed by
+  `ais_geo_dataset_active_info`.
 
 ---
 

@@ -192,6 +192,15 @@ http://127.0.0.1:3001
 
 Use the Grafana credentials from `.env.production`.
 
+The provisioned AIS Tracking System dashboard includes a **Geo Validation**
+section. During geo rollout and tuning, watch:
+
+- `Deep-land rejects / sec` for `reject/deep_land` spikes.
+- `Geo validation errors / sec` for fail-open/fail-closed validation failures.
+- `Geo cache hit ratio` for Redis cache effectiveness.
+- `PostGIS geo validation p95 latency` for database validation cost.
+- `Active geo dataset` to confirm only one active dataset version is exposed.
+
 ## Manual Sanctions And DLQ Notes
 
 No production sanctions import workflow is automated in this phase. If manual
