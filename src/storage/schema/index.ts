@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -13,7 +14,22 @@ import {
   bigserial,
   integer,
   date,
+  boolean,
+  customType,
 } from 'drizzle-orm/pg-core';
+
+/**
+ * Drizzle ORM 0.45.2 accepts a geometry type option at the type level, but its
+ * native PostGIS column implementation still emits geometry(point). Geo import
+ * tables intentionally accept mixed Polygon/MultiPolygon/GeometryCollection
+ * output from ST_MakeValid/ST_Subdivide, so keep this explicit generic geometry
+ * custom type until native non-point PostGIS columns are represented correctly.
+ */
+const geoGeometry = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'geometry(Geometry, 4326)';
+  },
+});
 
 export const vessels = pgTable(
   'vessels',
@@ -137,3 +153,85 @@ export const sanctionsImportRuns = pgTable(
 export type SanctionedEntity = typeof sanctionedEntities.$inferSelect;
 export type NewSanctionedEntity = typeof sanctionedEntities.$inferInsert;
 export type SanctionsImportRun = typeof sanctionsImportRuns.$inferSelect;
+
+export const geoDatasetVersions = pgTable(
+  'geo_dataset_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    version: text('version').notNull(),
+    sourceMetadata: jsonb('source_metadata').notNull(),
+    coverageMarginKm: doublePrecision('coverage_margin_km').notNull(),
+    coastalToleranceMeters: doublePrecision('coastal_tolerance_meters').notNull(),
+    isActive: boolean('is_active').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('geo_dataset_versions_version_uniq').on(t.version),
+    uniqueIndex('geo_dataset_versions_single_active_idx')
+      .on(t.isActive)
+      .where(sql`${t.isActive}`),
+  ],
+);
+
+export const geoLandPolygons = pgTable(
+  'geo_land_polygons',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    datasetVersionId: uuid('dataset_version_id')
+      .notNull()
+      .references(() => geoDatasetVersions.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    sourceLayer: text('source_layer'),
+    region: text('region'),
+    geom: geoGeometry('geom').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('geo_land_polygons_dataset_version_idx').on(t.datasetVersionId),
+    index('geo_land_polygons_source_idx').on(t.source),
+    index('geo_land_polygons_geom_gist').using('gist', t.geom),
+  ],
+);
+
+export const geoNavigableWaterPolygons = pgTable(
+  'geo_navigable_water_polygons',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    datasetVersionId: uuid('dataset_version_id')
+      .notNull()
+      .references(() => geoDatasetVersions.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    sourceLayer: text('source_layer'),
+    region: text('region'),
+    geom: geoGeometry('geom').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('geo_navigable_water_polygons_dataset_version_idx').on(t.datasetVersionId),
+    index('geo_navigable_water_polygons_source_idx').on(t.source),
+    index('geo_navigable_water_polygons_geom_gist').using('gist', t.geom),
+  ],
+);
+
+export const geoManualOverrides = pgTable(
+  'geo_manual_overrides',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    datasetVersionId: uuid('dataset_version_id')
+      .notNull()
+      .references(() => geoDatasetVersions.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    sourceLayer: text('source_layer'),
+    region: text('region'),
+    geom: geoGeometry('geom').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('geo_manual_overrides_dataset_version_idx').on(t.datasetVersionId),
+    index('geo_manual_overrides_source_idx').on(t.source),
+    index('geo_manual_overrides_geom_gist').using('gist', t.geom),
+  ],
+);
+
+export type GeoDatasetVersion = typeof geoDatasetVersions.$inferSelect;

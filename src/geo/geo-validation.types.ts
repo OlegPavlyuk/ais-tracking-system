@@ -7,6 +7,7 @@ export type GeoValidationReason =
   | 'deep_land'
   | 'not_land'
   | 'dataset_unavailable'
+  | 'invalid_coordinates'
   | 'disabled'
   | 'geo_validation_error';
 

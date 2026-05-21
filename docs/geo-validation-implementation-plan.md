@@ -856,12 +856,12 @@ What to build:
 
 Acceptance criteria:
 
-- [ ] Migrations apply on a fresh PostGIS database.
-- [ ] SQL function returns structured verdicts.
-- [ ] Fixture tests cover allow, reject, uncertain, and dataset unavailable.
-- [ ] Fixture tests cover evaluation order: manual override, navigable water,
+- [x] Migrations apply on a fresh PostGIS database.
+- [x] SQL function returns structured verdicts.
+- [x] Fixture tests cover allow, reject, uncertain, and dataset unavailable.
+- [x] Fixture tests cover evaluation order: manual override, navigable water,
       coastal tolerance, deep land, not land.
-- [ ] Failed/no active dataset behavior is explicit and tested.
+- [x] Failed/no active dataset behavior is explicit and tested.
 
 ### Phase 3 - Dataset Import Tooling
 
@@ -977,9 +977,9 @@ committing.
 - [x] Geo metric names/providers added.
 - [x] Drop reasons added.
 - [x] Geo module skeleton added.
-- [ ] Geo schema migrated.
-- [ ] SQL function implemented.
-- [ ] SQL integration fixtures added.
+- [x] Geo schema migrated.
+- [x] SQL function implemented.
+- [x] SQL integration fixtures added.
 - [ ] Dataset metadata file added.
 - [ ] Import tooling implemented.
 - [ ] Manual overrides directory added.
@@ -995,6 +995,11 @@ committing.
 - [ ] Runtime container verified without GDAL.
 - [ ] First dataset bootstrap tested.
 - [ ] Real AIS tuning pass completed.
+
+## Implementation Notes
+
+- Phase 2 migration and fixture integration tests were verified against a fresh
+  Testcontainers PostGIS database after Docker was enabled locally.
 
 ---
 

@@ -50,6 +50,13 @@
       "when": 1777840000000,
       "tag": "0006_daily_history_partitions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779400000000,
+      "tag": "0007_geo_validation",
+      "breakpoints": true
     }
   ]
 }
