@@ -894,11 +894,11 @@ What to build:
 
 Acceptance criteria:
 
-- [ ] Cache keys include active dataset version.
-- [ ] Cache TTL differs for `uncertain`.
-- [ ] Fail-open behavior emits metric/log and allows event.
-- [ ] Fail-closed behavior can drop with `geo_validation_error`.
-- [ ] Unit tests cover service behavior.
+- [x] Cache keys include active dataset version.
+- [x] Cache TTL differs for `uncertain`.
+- [x] Fail-open behavior emits metric/log and allows event.
+- [x] Fail-closed behavior can drop with `geo_validation_error`.
+- [x] Unit tests cover service behavior.
 
 ### Phase 5 - Pipeline Integration
 
@@ -985,11 +985,11 @@ committing.
 - [x] Manual overrides directory added.
 - [x] Manual overrides imported.
 - [x] Dataset active-version swap implemented.
-- [ ] Geo repository implemented.
-- [ ] Redis cache implemented.
-- [ ] Geo validation service implemented.
+- [x] Geo repository implemented.
+- [x] Redis cache implemented.
+- [x] Geo validation service implemented.
 - [ ] Pipeline wired.
-- [ ] Metrics/logs added.
+- [x] Metrics/logs added.
 - [ ] Grafana panels added.
 - [ ] Integration tests passing.
 - [ ] Runtime container verified without GDAL.
@@ -1007,6 +1007,11 @@ committing.
 - Phase 3 intentionally pins tiny repo-owned fixture GeoJSON datasets in
   `scripts/geo/datasets.json` to validate import lifecycle behavior before
   large OSMData/Geofabrik imports are introduced during real data tuning.
+- Phase 4 keeps pipeline decisions for Phase 5 but returns `shouldDrop` from
+  `GeoValidationService` so `reject/deep_land` and fail-closed
+  `geo_validation_error` can be mapped cleanly by the pipeline.
+- Phase 4 records active dataset version as a single info-style gauge label by
+  removing the previous version label when a new active version is observed.
 
 ---
 

@@ -22,5 +22,12 @@ export interface GeoValidationInput {
 export interface GeoValidationResult {
   verdict: GeoValidationVerdict;
   reason: GeoValidationReason;
-  datasetVersion?: string;
+  datasetVersion: string | null;
+  shouldDrop: boolean;
+}
+
+export interface GeoValidationRepositoryResult {
+  verdict: GeoValidationVerdict;
+  reason: Exclude<GeoValidationReason, 'disabled' | 'geo_validation_error'>;
+  datasetVersion: string | null;
 }

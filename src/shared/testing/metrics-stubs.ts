@@ -5,7 +5,12 @@ export const stubCounter = (): Counter<string> =>
   ({ inc: () => undefined }) as unknown as Counter<string>;
 
 export const stubGauge = (): Gauge<string> =>
-  ({ set: () => undefined, inc: () => undefined, dec: () => undefined }) as unknown as Gauge<string>;
+  ({
+    set: () => undefined,
+    inc: () => undefined,
+    dec: () => undefined,
+    remove: () => undefined,
+  }) as unknown as Gauge<string>;
 
 export const stubHistogram = (): Histogram<string> =>
   ({
