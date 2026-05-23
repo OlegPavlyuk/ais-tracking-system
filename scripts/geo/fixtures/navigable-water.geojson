@@ -1,11 +1,11 @@
 {
   "type": "FeatureCollection",
-  "name": "phase3_fixture_navigable_water",
+  "name": "phase7_tuning_fixture_navigable_water",
   "features": [
     {
       "type": "Feature",
       "properties": {
-        "name": "phase3-fixture-navigable-water"
+        "name": "phase3-import-lifecycle-navigable-water"
       },
       "geometry": {
         "type": "Polygon",
@@ -16,6 +16,60 @@
             [30.04, 45.04],
             [30.02, 45.04],
             [30.02, 45.02]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "phase7-rhone-lyon-navigation"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [4.815, 45.735],
+            [4.830, 45.735],
+            [4.830, 45.770],
+            [4.815, 45.770],
+            [4.815, 45.735]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "phase7-danube-galati-navigation"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [28.015, 45.410],
+            [28.080, 45.410],
+            [28.080, 45.455],
+            [28.015, 45.455],
+            [28.015, 45.410]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "phase7-bosphorus-istanbul-navigation"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [28.965, 40.985],
+            [29.055, 40.985],
+            [29.055, 41.055],
+            [28.965, 41.055],
+            [28.965, 40.985]
           ]
         ]
       }

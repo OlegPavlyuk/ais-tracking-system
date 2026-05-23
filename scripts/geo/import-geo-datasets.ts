@@ -5,6 +5,7 @@ import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path';
 import postgres, { Sql } from 'postgres';
 import { AIS_COVERAGE_ZONES, Bbox } from '../../src/shared/config/constants';
+import { loadEnvFileForLocalDevelopment } from '../../src/shared/config/load-env';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,6 +58,7 @@ interface PreparedSource extends DatasetSource {
 }
 
 export async function runGeoImport(overrides: Partial<ImportOptions> = {}): Promise<string> {
+  loadEnvFileForLocalDevelopment();
   const options = readOptions(overrides);
   const manifest = await readManifest(options.datasetsPath);
   validateManifest(manifest);

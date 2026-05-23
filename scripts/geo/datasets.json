@@ -1,9 +1,9 @@
 {
-  "metadataVersion": "phase3-fixture-v1",
-  "description": "Small pinned GeoJSON datasets used to validate the geo import lifecycle before large OSM/Geofabrik imports are introduced.",
+  "metadataVersion": "phase7-tuning-fixture-v1",
+  "description": "Small pinned GeoJSON datasets used to validate the geo import lifecycle and deterministic Phase 7 tuning probes before large OSM/Geofabrik imports are introduced.",
   "sources": [
     {
-      "name": "phase3-fixture-land",
+      "name": "phase7-tuning-fixture-land",
       "type": "land",
       "region": "Black Sea fixture",
       "sourceLayer": "land",
@@ -11,10 +11,10 @@
       "path": "scripts/geo/fixtures/land.geojson",
       "license": "Repository fixture; production land baseline is expected to use OSM-derived OSMData land polygons.",
       "attribution": "AIS Tracking System fixture geometry",
-      "pinnedVersion": "2026-05-21-phase3-fixture"
+      "pinnedVersion": "2026-05-21-phase7-tuning-fixture"
     },
     {
-      "name": "phase3-fixture-navigable-water",
+      "name": "phase7-tuning-fixture-navigable-water",
       "type": "navigable_water",
       "region": "Black Sea fixture",
       "sourceLayer": "navigable_water",
@@ -22,7 +22,7 @@
       "path": "scripts/geo/fixtures/navigable-water.geojson",
       "license": "Repository fixture; production inland water is expected to use OSM/Geofabrik-derived data plus manual overrides.",
       "attribution": "AIS Tracking System fixture geometry",
-      "pinnedVersion": "2026-05-21-phase3-fixture"
+      "pinnedVersion": "2026-05-21-phase7-tuning-fixture"
     }
   ]
 }

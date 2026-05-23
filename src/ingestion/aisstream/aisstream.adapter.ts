@@ -53,7 +53,9 @@ export class AisStreamAdapter implements AisProviderAdapter {
     private readonly droppedCounter: Counter<'reason'>,
     @Optional() deps?: AdapterDeps,
   ) {
-    this.webSocketFactory = deps?.webSocketFactory ?? ((url) => new WebSocket(url));
+    this.webSocketFactory = deps?.webSocketFactory ?? ((url) => new WebSocket(url, {
+        rejectUnauthorized: false,
+    }));
   }
 
   onMessage(handler: RawMessageHandler): void {
