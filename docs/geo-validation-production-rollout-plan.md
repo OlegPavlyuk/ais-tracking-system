@@ -304,6 +304,7 @@ the same one-off service:
 ```bash
 sudo docker compose ... run --rm --entrypoint ogr2ogr geo-import --version
 sudo docker compose ... run --rm --entrypoint gdalinfo geo-import --version
+sudo docker compose ... run --rm --entrypoint ogr2ogr geo-import --formats | grep -i PostgreSQL
 ```
 
 Run the one-shot import job:
@@ -673,6 +674,7 @@ docker build --target migrator .
 docker build --target geo-import .
 docker run --rm <built-geo-import-image> ogr2ogr --version
 docker run --rm <built-geo-import-image> gdalinfo --version
+docker run --rm <built-geo-import-image> ogr2ogr --formats | grep -i PostgreSQL
 docker compose --env-file .env.production.example --env-file <test-release-env> -f docker-compose.prod.yml config
 ```
 

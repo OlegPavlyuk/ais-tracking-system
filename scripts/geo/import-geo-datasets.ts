@@ -337,6 +337,8 @@ async function loadWithOgr2ogr(source: PreparedSource, databaseUrl: string): Pro
     '-overwrite',
     '-t_srs',
     'EPSG:4326',
+    '-fieldTypeToString',
+    'All',
     '-skipfailures',
   ];
   if (source.ogrLayer) {
