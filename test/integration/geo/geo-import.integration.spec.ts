@@ -2,6 +2,8 @@ import postgres, { Sql } from 'postgres';
 import { runGeoImport } from '../../../scripts/geo/import-geo-datasets';
 import { assertIntegrationDatabase } from '../setup/testcontainers-postgres';
 
+const FIXTURE_DATASETS_PATH = 'scripts/geo/datasets.fixture.json';
+
 interface ActiveVersionRow {
   id: string;
   version: string;
@@ -57,6 +59,21 @@ async function countRows(
   return rows[0]?.count ?? 0;
 }
 
+async function countRowsBySource(
+  client: Sql,
+  tableName: string,
+  datasetVersionId: string,
+  source: string,
+): Promise<number> {
+  const rows = await client<CountRow[]>`
+    SELECT count(*)::int AS count
+    FROM ${client(tableName)}
+    WHERE dataset_version_id = ${datasetVersionId}
+      AND source = ${source}
+  `;
+  return rows[0]?.count ?? 0;
+}
+
 async function validate(client: Sql, lon: number, lat: number): Promise<GeoValidationResult> {
   const rows = await client<{ result: GeoValidationResult }[]>`
     SELECT geo_validate_position(${lon}, ${lat}) AS result
@@ -90,6 +107,7 @@ describe('geo dataset import tooling', () => {
   it('bootstraps a fresh database and imports clipped dataset rows', async () => {
     await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
+      datasetsPath: FIXTURE_DATASETS_PATH,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -99,10 +117,28 @@ describe('geo dataset import tooling', () => {
     expect(await countRows(client, 'geo_land_polygons', active!.id)).toBeGreaterThan(0);
     expect(await countRows(client, 'geo_navigable_water_polygons', active!.id)).toBeGreaterThan(0);
     expect(await countRows(client, 'geo_manual_overrides', active!.id)).toBeGreaterThan(0);
+    expect(
+      await countRowsBySource(
+        client,
+        'geo_navigable_water_polygons',
+        active!.id,
+        'phase8-geofabrik-waterways-fixture',
+      ),
+    ).toBeGreaterThan(0);
 
     await expect(validate(client, 30.07, 45.07)).resolves.toMatchObject({
       verdict: 'allow',
       reason: 'manual_allow',
+      datasetVersion: active!.version,
+    });
+    await expect(validate(client, 7.58678, 47.56220333333333)).resolves.toMatchObject({
+      verdict: 'allow',
+      reason: 'navigable_water',
+      datasetVersion: active!.version,
+    });
+    await expect(validate(client, 7.61, 47.56)).resolves.toMatchObject({
+      verdict: 'reject',
+      reason: 'deep_land',
       datasetVersion: active!.version,
     });
   });
@@ -110,6 +146,7 @@ describe('geo dataset import tooling', () => {
   it('can be safely rerun and activates only the latest successful version', async () => {
     const firstVersion = await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
+      datasetsPath: FIXTURE_DATASETS_PATH,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -117,6 +154,7 @@ describe('geo dataset import tooling', () => {
 
     const secondVersion = await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
+      datasetsPath: FIXTURE_DATASETS_PATH,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -137,6 +175,7 @@ describe('geo dataset import tooling', () => {
   it('leaves the previous active version untouched when an import fails', async () => {
     const firstVersion = await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
+      datasetsPath: FIXTURE_DATASETS_PATH,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -145,6 +184,7 @@ describe('geo dataset import tooling', () => {
     await expect(
       runGeoImport({
         databaseUrl: process.env.DATABASE_URL,
+        datasetsPath: FIXTURE_DATASETS_PATH,
         useOgr2ogr: false,
         workDir: '.geo-import-test',
         failAfterLoad: true,

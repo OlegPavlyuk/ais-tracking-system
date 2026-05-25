@@ -1,0 +1,42 @@
+{
+  "metadataVersion": "phase8-inland-water-fixture-v1",
+  "description": "Small pinned GeoJSON datasets used to validate the geo import lifecycle and deterministic inland-water tuning probes before large OSM/Geofabrik imports are introduced.",
+  "sources": [
+    {
+      "name": "phase8-tuning-fixture-land",
+      "type": "land",
+      "region": "Black Sea fixture",
+      "sourceLayer": "land",
+      "targetTable": "geo_land_polygons",
+      "path": "scripts/geo/fixtures/land.geojson",
+      "license": "Repository fixture; production land baseline is expected to use OSM-derived OSMData land polygons.",
+      "attribution": "AIS Tracking System fixture geometry",
+      "pinnedVersion": "2026-05-23-phase8-inland-water-fixture"
+    },
+    {
+      "name": "phase8-tuning-fixture-navigable-water",
+      "type": "navigable_water",
+      "region": "Black Sea fixture",
+      "sourceLayer": "navigable_water",
+      "targetTable": "geo_navigable_water_polygons",
+      "path": "scripts/geo/fixtures/navigable-water.geojson",
+      "license": "Repository fixture; production inland water is expected to use OSM/Geofabrik-derived data plus manual overrides.",
+      "attribution": "AIS Tracking System fixture geometry",
+      "pinnedVersion": "2026-05-23-phase8-inland-water-fixture"
+    },
+    {
+      "name": "phase8-geofabrik-waterways-fixture",
+      "type": "navigable_water",
+      "region": "Rhine fixture",
+      "sourceLayer": "geofabrik_waterways",
+      "targetTable": "geo_navigable_water_polygons",
+      "geometryOperation": "line_buffer",
+      "includeFclasses": ["river", "canal"],
+      "defaultLineBufferMeters": 150,
+      "path": "scripts/geo/fixtures/geofabrik-waterways.geojson",
+      "license": "Repository fixture; production inland water is expected to use OSM/Geofabrik-derived data plus manual overrides.",
+      "attribution": "AIS Tracking System fixture geometry",
+      "pinnedVersion": "2026-05-23-phase8-inland-water-fixture"
+    }
+  ]
+}

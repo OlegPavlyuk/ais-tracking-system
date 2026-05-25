@@ -329,6 +329,7 @@ The metadata file should capture:
 - Dataset URL.
 - Dataset type/layer.
 - Region/extract name.
+- Purpose and notes explaining why the source exists.
 - License/attribution note.
 - Pinned date or version when available.
 - Optional checksum if practical.
@@ -470,6 +471,16 @@ License:
 
 Initial support is best effort. Manual overrides should cover practical gaps
 found during tuning.
+
+For Geofabrik free GIS extracts, import the polygon `water` layer for area
+features such as `river`, `dock`, and `reservoir`, and import the line
+`waterways` layer for selected linear features such as `river` and `canal` by
+buffering them at import time into polygons. Geofabrik documents the relevant
+free layers as `waterways` line classes `river`, `stream`, `canal`, `drain` and
+`water` polygon classes including `water`, `reservoir`, `river`, `dock`, and
+`wetland`. The initial navigable-water import should start conservatively with
+`river` and `canal` line classes, plus reviewed water polygon classes, so drains
+and small streams do not become broad allow corridors by accident.
 
 ### Manual Overrides
 
@@ -951,6 +962,28 @@ Acceptance criteria:
 - [x] Major navigable/inland-water cases pass where source data supports them.
 - [x] Deep-land logs can be reduced to sampled/rate-limited mode after tuning.
 
+### Phase 8 - Inland / Navigable River Coverage
+
+What to build:
+
+- Add import manifest support for Geofabrik layer/class selection.
+- Add import-time buffering for selected line waterways into
+  `geo_navigable_water_polygons`.
+- Preserve runtime polygon-only validation and SQL evaluation order.
+- Add deterministic Rhine probes that allow river traffic while rejecting nearby
+  land.
+- Document the Geofabrik real-data recipe and caveats.
+
+Acceptance criteria:
+
+- [x] Geofabrik-style `waterways` line fixtures import as buffered navigable
+      polygons.
+- [x] Non-selected waterway classes such as `drain` are filtered out.
+- [x] Rhine fixture point returns `allow/navigable_water`.
+- [x] Nearby Rhine land fixture point remains `reject/deep_land`.
+- [ ] Real Geofabrik Rhine extract imported and validated locally.
+- [ ] Runtime container verified without GDAL.
+
 ---
 
 ## Recommended Slice Order
@@ -995,6 +1028,9 @@ committing.
 - [ ] Runtime container verified without GDAL.
 - [x] First dataset bootstrap tested.
 - [x] Real AIS tuning pass completed.
+- [x] Geofabrik-style inland waterway import path added.
+- [x] Rhine deterministic tuning probes added.
+- [ ] Real Geofabrik Rhine import verified.
 
 ## Implementation Notes
 
@@ -1005,7 +1041,7 @@ committing.
   installed in the local runtime. The normal application Docker runtime still
   has no GDAL dependency.
 - Phase 3 intentionally pins tiny repo-owned fixture GeoJSON datasets in
-  `scripts/geo/datasets.json` to validate import lifecycle behavior before
+  `scripts/geo/datasets.fixture.json` to validate import lifecycle behavior before
   large OSMData/Geofabrik imports are introduced during real data tuning.
 - Phase 4 keeps pipeline decisions for Phase 5 but returns `shouldDrop` from
   `GeoValidationService` so `reject/deep_land` and fail-closed
@@ -1043,6 +1079,55 @@ committing.
   `GEO_COASTAL_TOLERANCE_METERS=500` allowed the Marseille nearshore probe as
   `uncertain/coastal_tolerance`, and deep-land rejects are metric-first rather
   than per-event reject logs, so no additional log sampling change was needed.
+- Phase 8 adds `geometryOperation: "line_buffer"` to the geo import manifest.
+  The operation keeps feature properties in staging, filters selected
+  Geofabrik-style `fclass` values, clips by `AIS_COVERAGE_ZONES +
+  GEO_COVERAGE_MARGIN_KM`, buffers line geometries as geography meters, then
+  subdivides and loads them into `geo_navigable_water_polygons`. Runtime remains
+  unchanged and continues to query only polygon tables.
+- Phase 8 line buffering uses a conservative default of 75 meters when the
+  source width is absent, zero, or non-numeric. This is an import-time
+  approximation, not a validation heuristic. Production manifests can override
+  it per source with `defaultLineBufferMeters`, and real Rhine probes must verify
+  whether the default is appropriate for major-river AIS traffic.
+- Phase 8 preserves the SQL evaluation order. Buffered inland waterways are
+  imported into the existing navigable-water table, which is still evaluated
+  before coastal tolerance and deep-land rejection.
+- Phase 8 Geofabrik research notes: free extracts expose line waterways in the
+  `waterways` layer with `fclass` values including `river`, `stream`, `canal`,
+  and `drain`; water polygons are exposed in the `water` layer with classes
+  including `water`, `reservoir`, `river`, `dock`, `glacier`, and `wetland`.
+  The first real Rhine import should use `gis_osm_waterways_free` with
+  `includeFclasses: ["river", "canal"]` and a reviewed default buffer, plus
+  `gis_osm_water_a_free` for reviewed polygon classes such as `river`,
+  `dock`, `reservoir`, and possibly broad `water` where spot checks confirm it
+  is appropriate.
+- For Geofabrik zipped GeoPackage sources, set `archivePath` to the inner
+  `.gpkg` file and `ogrLayer` to the layer inside that GeoPackage, for example
+  `gis_osm_waterways_free` or `gis_osm_water_a_free`. Downloaded source file
+  extensions are now preserved, and `.zip` sources are passed to GDAL through
+  `/vsizip/` because direct local `.zip` paths were not recognized in a local
+  GDAL smoke test.
+- Phase 8 verification on May 25, 2026: focused `src/geo` unit tests,
+  `src/pipeline/ingestion-pipeline.service.spec.ts`, the available enrichment
+  e2e spec, `pnpm typecheck`, `pnpm lint`, `pnpm migrate:check`, and
+  `git diff --check` passed. Focused PostGIS geo integration tests could not
+  run in this environment because Testcontainers could not find a working
+  container runtime strategy.
+- Phase 8 promotes `scripts/geo/datasets.json` to the initial production-like
+  manifest and moves deterministic local fixtures to
+  `scripts/geo/datasets.fixture.json`. The production-like manifest downloads
+  OSMData land polygons for land rejection, OSMData water polygons for
+  sea/coastal/open-water allow coverage, and selected Geofabrik free
+  `.gpkg.zip` extracts for Rhine river/canal coverage. Fixture integration tests
+  now pass `datasetsPath: "scripts/geo/datasets.fixture.json"` explicitly so
+  normal test runs do not download large external datasets.
+- Local and remote GDAL smoke tests verified `/vsizip/` access for OSMData
+  nested Shapefiles and Geofabrik zipped GeoPackages. Remote `ogrinfo` checks
+  confirmed the configured inner `.gpkg` filenames and no-suffix layer names
+  for Koeln Regierungsbezirk, Freiburg Regierungsbezirk, Karlsruhe
+  Regierungsbezirk, Rheinland-Pfalz, Gelderland, Zuid-Holland, and Alsace.
+  Full real import remains a local PostGIS verification step.
 
 ---
 

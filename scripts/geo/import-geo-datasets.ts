@@ -19,6 +19,7 @@ const ALLOWED_TARGET_TABLES = new Set([
 ]);
 
 type TargetTable = 'geo_land_polygons' | 'geo_navigable_water_polygons' | 'geo_manual_overrides';
+type GeometryOperation = 'polygon' | 'line_buffer';
 type TransactionSql = postgres.TransactionSql;
 
 interface DatasetSource {
@@ -27,6 +28,11 @@ interface DatasetSource {
   region: string;
   sourceLayer?: string;
   targetTable: TargetTable;
+  ogrLayer?: string;
+  geometryOperation?: GeometryOperation;
+  includeFclasses?: string[];
+  defaultLineBufferMeters?: number;
+  archivePath?: string;
   path?: string;
   url?: string;
   license: string;
@@ -174,6 +180,22 @@ function validateManifest(manifest: DatasetManifest): void {
     if (!source.path && !source.url) {
       throw new Error(`Geo dataset source "${source.name}" requires path or url.`);
     }
+    if (
+      source.geometryOperation &&
+      !['polygon', 'line_buffer'].includes(source.geometryOperation)
+    ) {
+      throw new Error(
+        `Geo dataset source "${source.name}" has unsupported geometryOperation "${source.geometryOperation}".`,
+      );
+    }
+    if (
+      source.defaultLineBufferMeters !== undefined &&
+      (!Number.isFinite(source.defaultLineBufferMeters) || source.defaultLineBufferMeters <= 0)
+    ) {
+      throw new Error(
+        `Geo dataset source "${source.name}" defaultLineBufferMeters must be a positive number.`,
+      );
+    }
   }
 }
 
@@ -248,7 +270,10 @@ async function prepareManualOverrideSources(
 }
 
 async function materializeSource(source: DatasetSource, importWorkDir: string): Promise<string> {
-  const targetPath = path.join(importWorkDir, `${sanitizeName(source.name)}.geojson`);
+  const targetPath = path.join(
+    importWorkDir,
+    `${sanitizeName(source.name)}${sourceExtension(source)}`,
+  );
   if (source.path) {
     const absolutePath = path.resolve(source.path);
     const content = await readFile(absolutePath);
@@ -302,7 +327,7 @@ async function loadWithOgr2ogr(source: PreparedSource, databaseUrl: string): Pro
     '-f',
     'PostgreSQL',
     toOgrPostgresConnection(databaseUrl),
-    source.absolutePath,
+    toOgrReadablePath(source),
     '-nln',
     source.stagingTable,
     '-nlt',
@@ -314,6 +339,9 @@ async function loadWithOgr2ogr(source: PreparedSource, databaseUrl: string): Pro
     'EPSG:4326',
     '-skipfailures',
   ];
+  if (source.ogrLayer) {
+    args.push(source.ogrLayer);
+  }
   try {
     await execFileAsync('ogr2ogr', args, { maxBuffer: 1024 * 1024 * 8 });
   } catch (err) {
@@ -340,13 +368,16 @@ function toOgrPostgresConnection(databaseUrl: string): string {
 
 async function loadGeoJsonWithPostgis(client: Sql, source: PreparedSource): Promise<void> {
   const raw = await readFile(source.absolutePath, 'utf8');
-  const parsed = JSON.parse(raw) as { features?: Array<{ geometry?: unknown }> };
+  const parsed = JSON.parse(raw) as {
+    features?: Array<{ geometry?: unknown; properties?: Record<string, unknown> | null }>;
+  };
   const features = parsed.features ?? [];
 
   await client.unsafe(
     `CREATE TABLE "${source.stagingTable}" (
       id bigserial PRIMARY KEY,
-      geom geometry(Geometry, 4326) NOT NULL
+      geom geometry(Geometry, 4326) NOT NULL,
+      geo_import_properties jsonb NOT NULL DEFAULT '{}'::jsonb
     )`,
   );
 
@@ -355,8 +386,11 @@ async function loadGeoJsonWithPostgis(client: Sql, source: PreparedSource): Prom
       continue;
     }
     await client`
-      INSERT INTO ${client(source.stagingTable)} (geom)
-      VALUES (ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(feature.geometry)}), 4326))
+      INSERT INTO ${client(source.stagingTable)} (geom, geo_import_properties)
+      VALUES (
+        ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(feature.geometry)}), 4326),
+        ${client.json(JSON.parse(JSON.stringify(feature.properties ?? {})))}::jsonb
+      )
     `;
   }
 }
@@ -374,6 +408,30 @@ async function ensureStagingGeometryColumn(client: Sql, stagingTable: string): P
   if (!rows[0]?.exists) {
     throw new Error(`Staging table "${stagingTable}" does not contain geom column.`);
   }
+  await ensureStagingPropertiesColumn(client, stagingTable);
+}
+
+async function ensureStagingPropertiesColumn(client: Sql, stagingTable: string): Promise<void> {
+  await client.unsafe(
+    `ALTER TABLE "${stagingTable}" ADD COLUMN IF NOT EXISTS geo_import_properties jsonb NOT NULL DEFAULT '{}'::jsonb`,
+  );
+
+  const rows = await client<{ column_name: string }[]>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = ${stagingTable}
+      AND column_name = ANY(${['fclass', 'name', 'width']})
+  `;
+  const columns = rows.map((row) => row.column_name);
+  if (columns.length === 0) {
+    return;
+  }
+
+  const jsonPairs = columns.map((column) => `'${column}', "${column}"`).join(', ');
+  await client.unsafe(
+    `UPDATE "${stagingTable}" SET geo_import_properties = jsonb_strip_nulls(jsonb_build_object(${jsonPairs}))`,
+  );
 }
 
 async function activateImportedVersion(
@@ -463,6 +521,11 @@ async function insertProcessedGeometries(
   source: PreparedSource,
   datasetVersionId: string,
 ): Promise<void> {
+  if (source.geometryOperation === 'line_buffer') {
+    await insertBufferedLineGeometries(tx, source, datasetVersionId);
+    return;
+  }
+
   await tx`
     INSERT INTO ${tx(source.targetTable)} (
       dataset_version_id,
@@ -487,8 +550,67 @@ async function insertProcessedGeometries(
     ) dumped
     CROSS JOIN LATERAL ST_Subdivide(dumped.geom, 256) AS processed(geom)
     WHERE ST_Intersects(staging.geom, coverage.geom)
+      AND ${fclassFilter(tx, source)}
       AND NOT ST_IsEmpty(processed.geom)
   `;
+}
+
+async function insertBufferedLineGeometries(
+  tx: TransactionSql,
+  source: PreparedSource,
+  datasetVersionId: string,
+): Promise<void> {
+  const defaultBufferMeters = source.defaultLineBufferMeters ?? 75;
+  await tx`
+    INSERT INTO ${tx(source.targetTable)} (
+      dataset_version_id,
+      source,
+      source_layer,
+      region,
+      geom
+    )
+    SELECT
+      ${datasetVersionId},
+      ${source.name},
+      ${source.sourceLayer ?? source.type},
+      ${source.region},
+      processed.geom
+    FROM ${tx(source.stagingTable)} staging
+    CROSS JOIN geo_import_coverage_union coverage
+    CROSS JOIN LATERAL (
+      SELECT NULLIF(
+        CASE
+          WHEN staging.geo_import_properties->>'width' ~ '^[[:space:]]*[0-9]+(\\.[0-9]+)?[[:space:]]*$'
+            THEN (staging.geo_import_properties->>'width')::double precision
+          ELSE NULL
+        END,
+        0
+      ) AS width
+    ) safe_line_width_meters
+    CROSS JOIN LATERAL (
+      SELECT ST_SetSRID(
+        ST_Buffer(
+          ST_SetSRID(staging.geom, 4326)::geography,
+          COALESCE(safe_line_width_meters.width / 2, ${defaultBufferMeters})
+        )::geometry,
+        4326
+      ) AS geom
+    ) buffered
+    CROSS JOIN LATERAL ST_Dump(
+      ST_CollectionExtract(ST_MakeValid(ST_Intersection(buffered.geom, coverage.geom)), 3)
+    ) dumped_polygon
+    CROSS JOIN LATERAL ST_Subdivide(dumped_polygon.geom, 256) AS processed(geom)
+    WHERE ST_Intersects(staging.geom, coverage.geom)
+      AND ${fclassFilter(tx, source)}
+      AND NOT ST_IsEmpty(processed.geom)
+  `;
+}
+
+function fclassFilter(tx: TransactionSql, source: DatasetSource): ReturnType<TransactionSql> {
+  if (!source.includeFclasses || source.includeFclasses.length === 0) {
+    return tx`true`;
+  }
+  return tx`staging.geo_import_properties->>'fclass' IN ${tx(source.includeFclasses)}`;
 }
 
 async function ensureImportHasData(tx: TransactionSql, datasetVersionId: string): Promise<void> {
@@ -550,6 +672,25 @@ async function dropTable(client: Sql, tableName: string): Promise<void> {
 
 function sanitizeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-|-$/g, '');
+}
+
+export function toOgrReadablePath(source: Pick<DatasetSource, 'archivePath'> & {
+  absolutePath: string;
+}): string {
+  if (path.extname(source.absolutePath).toLowerCase() === '.zip') {
+    const archivePath = source.archivePath ? `/${source.archivePath.replace(/^\/+/, '')}` : '';
+    return `/vsizip/${source.absolutePath}${archivePath}`;
+  }
+  return source.absolutePath;
+}
+
+function sourceExtension(source: DatasetSource): string {
+  const sourcePath = source.path ?? source.url;
+  if (!sourcePath) {
+    return '.geojson';
+  }
+  const extension = path.extname(new URL(sourcePath, 'file:///').pathname);
+  return extension || '.geojson';
 }
 
 export function coverageZonesForImport(): readonly { name: string; bbox: Bbox }[] {

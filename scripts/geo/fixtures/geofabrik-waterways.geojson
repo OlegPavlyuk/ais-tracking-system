@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "name": "phase8_geofabrik_waterways_fixture",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "phase8-upper-rhine-navigation",
+        "fclass": "river",
+        "width": "unknown"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [7.552, 47.535],
+          [7.58678, 47.56220333333333],
+          [7.5985, 47.579],
+          [7.575641666666667, 47.61412833333333]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "phase8-non-navigable-drain-filter",
+        "fclass": "drain",
+        "width": 30
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [7.61, 47.545],
+          [7.61, 47.575]
+        ]
+      }
+    }
+  ]
+}

@@ -91,6 +91,24 @@
           ]
         ]
       }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "phase8-upper-rhine-deep-land-context"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [7.60, 47.545],
+            [7.75, 47.545],
+            [7.75, 47.58],
+            [7.60, 47.58],
+            [7.60, 47.545]
+          ]
+        ]
+      }
     }
   ]
 }

@@ -45,6 +45,27 @@
       "expectedReason": "navigable_water"
     },
     {
+      "name": "rhine-navigation-near-basel",
+      "lon": 7.58678,
+      "lat": 47.56220333333333,
+      "expectedVerdict": "allow",
+      "expectedReason": "navigable_water"
+    },
+    {
+      "name": "rhine-navigation-near-rheinfelden",
+      "lon": 7.7906,
+      "lat": 47.5596,
+      "expectedVerdict": "allow",
+      "expectedReason": "navigable_water"
+    },
+    {
+      "name": "rhine-nearby-basel-land",
+      "lon": 7.6100,
+      "lat": 47.5600,
+      "expectedVerdict": "reject",
+      "expectedReason": "deep_land"
+    },
+    {
       "name": "marseille-nearshore-coastal-tolerance",
       "lon": 5.3620,
       "lat": 43.3000,
