@@ -78,29 +78,65 @@ compose() {
 }
 
 required_services=(nginx api ingestion worker postgres redis prometheus grafana)
-running_services="$(compose ps --services --status running)"
+
+wait_for_service_running() {
+  local service="$1"
+  local attempt
+  local running_services
+
+  for attempt in $(seq 1 "$SMOKE_MAX_ATTEMPTS"); do
+    running_services="$(compose ps --services --status running)"
+    if grep -Fxq "$service" <<< "$running_services"; then
+      return 0
+    fi
+
+    if [[ "$attempt" -lt "$SMOKE_MAX_ATTEMPTS" ]]; then
+      echo "Service $service is not running on attempt $attempt/$SMOKE_MAX_ATTEMPTS. Retrying in ${SMOKE_RETRY_SLEEP_SECONDS}s..."
+      sleep "$SMOKE_RETRY_SLEEP_SECONDS"
+    else
+      echo "Service $service is not running after $SMOKE_MAX_ATTEMPTS attempts" >&2
+      return 1
+    fi
+  done
+}
+
+wait_for_service_health() {
+  local service="$1"
+  local attempt
+  local container_id
+  local health_status
+
+  for attempt in $(seq 1 "$SMOKE_MAX_ATTEMPTS"); do
+    container_id="$(compose ps -q "$service")"
+    if [[ -z "$container_id" ]]; then
+      health_status="missing"
+    else
+      health_status="$(docker_cmd inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id")"
+    fi
+
+    case "$health_status" in
+      healthy)
+        return 0
+        ;;
+      none)
+        echo "Service $service has no Docker healthcheck; accepting running container."
+        return 0
+        ;;
+    esac
+
+    if [[ "$attempt" -lt "$SMOKE_MAX_ATTEMPTS" ]]; then
+      echo "Service $service health status is $health_status on attempt $attempt/$SMOKE_MAX_ATTEMPTS, expected healthy. Retrying in ${SMOKE_RETRY_SLEEP_SECONDS}s..."
+      sleep "$SMOKE_RETRY_SLEEP_SECONDS"
+    else
+      echo "Service $service health status is $health_status after $SMOKE_MAX_ATTEMPTS attempts, expected healthy" >&2
+      return 1
+    fi
+  done
+}
 
 for service in "${required_services[@]}"; do
-  if ! grep -Fxq "$service" <<< "$running_services"; then
-    echo "Service $service is not running" >&2
-    exit 1
-  fi
-done
-
-for service in "${required_services[@]}"; do
-  container_id="$(compose ps -q "$service")"
-  health_status="$(docker_cmd inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id")"
-  case "$health_status" in
-    healthy)
-      ;;
-    none)
-      echo "Service $service has no Docker healthcheck; accepting running container."
-      ;;
-    *)
-      echo "Service $service health status is $health_status, expected healthy" >&2
-      exit 1
-      ;;
-  esac
+  wait_for_service_running "$service"
+  wait_for_service_health "$service"
 done
 
 echo "Smoke checks passed for $BASE_URL"
