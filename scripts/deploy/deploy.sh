@@ -101,6 +101,33 @@ compose() {
   docker_cmd compose --env-file "$PROD_ENV" --env-file "$release_env" "${compose_files[@]}" "$@"
 }
 
+release_env_has_geo_import_image() {
+  local release_env="$1"
+  [[ -f "$release_env" ]] || return 1
+
+  awk -F= '
+    /^[[:space:]]*AIS_GEO_IMPORT_IMAGE=/ {
+      value = $0
+      sub(/^[[:space:]]*AIS_GEO_IMPORT_IMAGE=/, "", value)
+      sub(/[[:space:]]+#.*$/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^"|"$/, "", value)
+      gsub(/^'\''|'\''$/, "", value)
+      if (value != "") found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' "$release_env"
+}
+
+pull_geo_import_if_configured() {
+  local release_env="$1"
+  if release_env_has_geo_import_image "$release_env"; then
+    compose "$release_env" pull geo-import
+  else
+    echo "Skipping geo-import image pull; $release_env does not define AIS_GEO_IMPORT_IMAGE."
+  fi
+}
+
 rollback_to_previous() {
   if [[ ! -f "$PREVIOUS_METADATA" ]]; then
     echo "Smoke checks failed and no previous release metadata exists for automatic rollback." >&2
@@ -110,7 +137,7 @@ rollback_to_previous() {
   echo "Smoke checks failed. Rolling containers back to previous release metadata."
   cp "$PREVIOUS_METADATA" "$RELEASE_ENV"
   compose "$RELEASE_ENV" pull
-  compose "$RELEASE_ENV" pull geo-import
+  pull_geo_import_if_configured "$RELEASE_ENV"
   compose "$RELEASE_ENV" up -d --remove-orphans
   AIS_DEPLOY_USE_SUDO_DOCKER="${AIS_DEPLOY_USE_SUDO_DOCKER:-false}" SMOKE_BASE_URL="$SMOKE_BASE_URL" scripts/deploy/smoke-check.sh
 }
@@ -120,7 +147,7 @@ cp "$NEXT_RELEASE_ENV" "$RELEASE_ENV.next"
 
 echo "Pulling release images"
 compose "$RELEASE_ENV.next" pull
-compose "$RELEASE_ENV.next" pull geo-import
+pull_geo_import_if_configured "$RELEASE_ENV.next"
 
 echo "Running database migrator"
 compose "$RELEASE_ENV.next" run --rm migrate
