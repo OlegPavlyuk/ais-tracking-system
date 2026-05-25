@@ -4,15 +4,10 @@ import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter } from 'prom-client';
 import { PinoLogger } from 'nestjs-pino';
 import { EVENT_BUS, EventBus } from '../shared/bus/event-bus';
-import {
-  AIS_COVERAGE_BBOXES,
-  AIS_EVENTS_STREAM,
-  pointInAnyBbox,
-} from '../shared/config/constants';
-import {
-  AIS_MESSAGES_DROPPED_TOTAL,
-  DropReason,
-} from '../shared/metrics/drop-reasons';
+import { GeoValidationService } from '../geo/geo-validation.service';
+import { GeoValidationReason } from '../geo/geo-validation.types';
+import { AIS_COVERAGE_BBOXES, AIS_EVENTS_STREAM, pointInAnyBbox } from '../shared/config/constants';
+import { AIS_MESSAGES_DROPPED_TOTAL, DropReason } from '../shared/metrics/drop-reasons';
 import {
   AIS_EVENTS_PUBLISHED_TOTAL,
   AIS_MESSAGES_RECEIVED_TOTAL,
@@ -31,6 +26,7 @@ export class IngestionPipelineService implements OnModuleInit {
     private readonly registry: ProviderRegistry,
     private readonly dedup: DedupService,
     private readonly sampler: SamplerService,
+    private readonly geoValidation: GeoValidationService,
     @Inject(EVENT_BUS) private readonly bus: EventBus,
     @InjectMetric(AIS_MESSAGES_DROPPED_TOTAL)
     private readonly droppedCounter: Counter<'reason'>,
@@ -48,9 +44,7 @@ export class IngestionPipelineService implements OnModuleInit {
       adapter.onMessage((raw) => {
         this.receivedCounter.inc({ provider: adapter.id });
         this.handle(raw, normalizer).catch((err) => {
-          this.logger.error(
-            `pipeline error for provider=${adapter.id}: ${(err as Error).message}`,
-          );
+          this.logger.error(`pipeline error for provider=${adapter.id}: ${(err as Error).message}`);
         });
       });
     }
@@ -69,15 +63,28 @@ export class IngestionPipelineService implements OnModuleInit {
       this.drop('duplicate');
       return;
     }
+    const traced: CanonicalEvent = { ...event, traceId: event.traceId ?? randomUUID() };
     if (event.kind === 'position' && !pointInAnyBbox(event.lat, event.lon, AIS_COVERAGE_BBOXES)) {
       this.drop('out_of_bbox');
       return;
     }
-    if (event.kind === 'position' && !(await this.sampler.shouldEmit(event))) {
+    if (traced.kind === 'position') {
+      const geoResult = await this.geoValidation.validatePosition({
+        lat: traced.lat,
+        lon: traced.lon,
+        mmsi: traced.mmsi,
+        provider: traced.provider,
+        traceId: traced.traceId,
+      });
+      if (geoResult.shouldDrop) {
+        this.drop(this.toGeoDropReason(geoResult.reason));
+        return;
+      }
+    }
+    if (traced.kind === 'position' && !(await this.sampler.shouldEmit(traced))) {
       this.drop('sampled');
       return;
     }
-    const traced: CanonicalEvent = { ...event, traceId: randomUUID() };
     await this.bus.publish(AIS_EVENTS_STREAM, traced);
     this.publishedCounter.inc({ stream: AIS_EVENTS_STREAM, kind: traced.kind });
     this.pino.debug(
@@ -94,5 +101,9 @@ export class IngestionPipelineService implements OnModuleInit {
 
   private drop(reason: DropReason): void {
     this.droppedCounter.inc({ reason });
+  }
+
+  private toGeoDropReason(reason: GeoValidationReason): DropReason {
+    return reason === 'geo_validation_error' ? 'geo_validation_error' : 'on_land';
   }
 }

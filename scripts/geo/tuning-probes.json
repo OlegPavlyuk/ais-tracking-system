@@ -1,0 +1,76 @@
+{
+  "metadataVersion": "phase7-tuning-probes-v1",
+  "description": "Representative geo-validation tuning probes for the first real-data tuning pass. These probes are intentionally small and deterministic so they can be run against any active imported dataset.",
+  "probes": [
+    {
+      "name": "paris-style-deep-land",
+      "lon": 2.3522,
+      "lat": 48.8566,
+      "expectedVerdict": "reject",
+      "expectedReason": "deep_land"
+    },
+    {
+      "name": "lyon-style-deep-land-away-from-rhone",
+      "lon": 4.8700,
+      "lat": 45.7600,
+      "expectedVerdict": "reject",
+      "expectedReason": "deep_land"
+    },
+    {
+      "name": "turin-style-deep-land",
+      "lon": 7.6869,
+      "lat": 45.0703,
+      "expectedVerdict": "reject",
+      "expectedReason": "deep_land"
+    },
+    {
+      "name": "rhone-navigation-near-lyon",
+      "lon": 4.8220,
+      "lat": 45.7520,
+      "expectedVerdict": "allow",
+      "expectedReason": "navigable_water"
+    },
+    {
+      "name": "danube-navigation-near-galati",
+      "lon": 28.0450,
+      "lat": 45.4300,
+      "expectedVerdict": "allow",
+      "expectedReason": "navigable_water"
+    },
+    {
+      "name": "bosphorus-navigation-near-istanbul",
+      "lon": 29.0000,
+      "lat": 41.0200,
+      "expectedVerdict": "allow",
+      "expectedReason": "navigable_water"
+    },
+    {
+      "name": "rhine-navigation-near-basel",
+      "lon": 7.58678,
+      "lat": 47.56220333333333,
+      "expectedVerdict": "allow",
+      "expectedReason": "navigable_water"
+    },
+    {
+      "name": "rhine-navigation-near-rheinfelden",
+      "lon": 7.7906,
+      "lat": 47.5596,
+      "expectedVerdict": "allow",
+      "expectedReason": "navigable_water"
+    },
+    {
+      "name": "rhine-nearby-basel-land",
+      "lon": 7.6100,
+      "lat": 47.5600,
+      "expectedVerdict": "reject",
+      "expectedReason": "deep_land"
+    },
+    {
+      "name": "marseille-nearshore-coastal-tolerance",
+      "lon": 5.3620,
+      "lat": 43.3000,
+      "expectedVerdict": "uncertain",
+      "expectedReason": "coastal_tolerance"
+    }
+  ]
+}

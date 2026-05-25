@@ -3,6 +3,14 @@ import { z } from 'zod';
 export const ProcessRoleSchema = z.enum(['all', 'api', 'ingestion', 'worker']);
 export type ProcessRole = z.infer<typeof ProcessRoleSchema>;
 
+const BooleanEnvSchema = (defaultValue: 'true' | 'false') =>
+  z
+    .string()
+    .default(defaultValue)
+    .transform((s) => s.toLowerCase())
+    .pipe(z.enum(['true', 'false']))
+    .transform((s) => s === 'true');
+
 export const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PROCESS_ROLE: ProcessRoleSchema.default('all'),
@@ -37,6 +45,15 @@ export const EnvSchema = z.object({
   SAMPLER_STATIONARY_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   SAMPLER_STATIONARY_SOG_KN: z.coerce.number().nonnegative().default(0.5),
   SAMPLER_STATE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+
+  GEO_VALIDATION_ENABLED: BooleanEnvSchema('true'),
+  GEO_VALIDATION_FAIL_OPEN: BooleanEnvSchema('true'),
+  GEO_COASTAL_TOLERANCE_METERS: z.coerce.number().positive().default(500),
+  GEO_COVERAGE_MARGIN_KM: z.coerce.number().positive().default(50),
+  GEO_CACHE_ENABLED: BooleanEnvSchema('true'),
+  GEO_CACHE_PRECISION: z.coerce.number().int().nonnegative().default(4),
+  GEO_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(7 * 24 * 60 * 60),
+  GEO_CACHE_UNCERTAIN_TTL_SECONDS: z.coerce.number().int().positive().default(30 * 60),
 
   HISTORY_RETENTION_DAYS: z.coerce.number().int().positive().default(7),
   HISTORY_PRECREATE_DAYS: z.coerce.number().int().nonnegative().default(7),

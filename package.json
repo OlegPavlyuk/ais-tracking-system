@@ -25,6 +25,8 @@
     "migrate": "drizzle-kit migrate",
     "migrate:generate": "drizzle-kit generate",
     "migrate:check": "drizzle-kit check",
+    "geo:import": "ts-node scripts/geo/import-geo-datasets.ts",
+    "geo:tune": "ts-node scripts/geo/validate-geo-tuning.ts",
     "partition:maintain": "ts-node scripts/maintain-history-partitions.ts",
     "web:dev": "pnpm --dir web dev",
     "web:build": "pnpm --dir web build"

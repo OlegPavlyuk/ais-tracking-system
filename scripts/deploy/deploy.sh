@@ -78,6 +78,7 @@ DEPLOY_SHA=$DEPLOY_SHA
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 AIS_BACKEND_IMAGE=$IMAGE_REGISTRY/backend:$DEPLOY_SHA
 AIS_MIGRATOR_IMAGE=$IMAGE_REGISTRY/migrator:$DEPLOY_SHA
+AIS_GEO_IMPORT_IMAGE=$IMAGE_REGISTRY/geo-import:$DEPLOY_SHA
 AIS_FRONTEND_IMAGE=$IMAGE_REGISTRY/frontend:$DEPLOY_SHA
 EOF
 
@@ -109,6 +110,7 @@ rollback_to_previous() {
   echo "Smoke checks failed. Rolling containers back to previous release metadata."
   cp "$PREVIOUS_METADATA" "$RELEASE_ENV"
   compose "$RELEASE_ENV" pull
+  compose "$RELEASE_ENV" pull geo-import
   compose "$RELEASE_ENV" up -d --remove-orphans
   AIS_DEPLOY_USE_SUDO_DOCKER="${AIS_DEPLOY_USE_SUDO_DOCKER:-false}" SMOKE_BASE_URL="$SMOKE_BASE_URL" scripts/deploy/smoke-check.sh
 }
@@ -118,6 +120,7 @@ cp "$NEXT_RELEASE_ENV" "$RELEASE_ENV.next"
 
 echo "Pulling release images"
 compose "$RELEASE_ENV.next" pull
+compose "$RELEASE_ENV.next" pull geo-import
 
 echo "Running database migrator"
 compose "$RELEASE_ENV.next" run --rm migrate

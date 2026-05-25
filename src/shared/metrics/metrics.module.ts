@@ -22,6 +22,10 @@ import {
 import {
   AIS_DEADLETTER_TOTAL,
   AIS_EVENTS_PUBLISHED_TOTAL,
+  AIS_GEO_DATASET_ACTIVE_INFO,
+  AIS_GEO_VALIDATION_CACHE_TOTAL,
+  AIS_GEO_VALIDATION_DURATION_SECONDS,
+  AIS_GEO_VALIDATION_TOTAL,
   AIS_MESSAGES_RECEIVED_TOTAL,
   AIS_STREAM_CONSUMER_LAG,
   AIS_STREAM_CONSUMER_PENDING,
@@ -94,6 +98,31 @@ const eventsPublishedProvider = makeCounterProvider({
   name: AIS_EVENTS_PUBLISHED_TOTAL,
   help: 'Total canonical events published to a stream, labelled by stream and kind.',
   labelNames: ['stream', 'kind'] as const,
+});
+
+const geoValidationTotalProvider = makeCounterProvider({
+  name: AIS_GEO_VALIDATION_TOTAL,
+  help: 'Geo-validation decisions for AIS positions, labelled by verdict, reason, and source.',
+  labelNames: ['verdict', 'reason', 'source'] as const,
+});
+
+const geoValidationCacheTotalProvider = makeCounterProvider({
+  name: AIS_GEO_VALIDATION_CACHE_TOTAL,
+  help: 'Geo-validation cache lookups, labelled by cache result.',
+  labelNames: ['result'] as const,
+});
+
+const geoValidationDurationProvider = makeHistogramProvider({
+  name: AIS_GEO_VALIDATION_DURATION_SECONDS,
+  help: 'Geo-validation duration in seconds, labelled by validation source.',
+  labelNames: ['source'] as const,
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+});
+
+const geoDatasetActiveInfoProvider = makeGaugeProvider({
+  name: AIS_GEO_DATASET_ACTIVE_INFO,
+  help: 'Active geo dataset version exposed as a controlled info-style gauge.',
+  labelNames: ['version'] as const,
 });
 
 const streamLagProvider = makeGaugeProvider({
@@ -189,6 +218,10 @@ const ALL_PROVIDERS = [
   providerReconnectsProvider,
   messagesReceivedProvider,
   eventsPublishedProvider,
+  geoValidationTotalProvider,
+  geoValidationCacheTotalProvider,
+  geoValidationDurationProvider,
+  geoDatasetActiveInfoProvider,
   streamLagProvider,
   streamPendingProvider,
   streamHandlerDurationProvider,

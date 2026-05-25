@@ -8,6 +8,10 @@ export const AIS_STREAM_CONSUMER_PENDING = 'ais_stream_consumer_pending';
 export const AIS_STREAM_HANDLER_DURATION_SECONDS = 'ais_stream_handler_duration_seconds';
 export const AIS_STREAM_HANDLER_ERRORS_TOTAL = 'ais_stream_handler_errors_total';
 export const AIS_DEADLETTER_TOTAL = 'ais_deadletter_total';
+export const AIS_GEO_VALIDATION_TOTAL = 'ais_geo_validation_total';
+export const AIS_GEO_VALIDATION_CACHE_TOTAL = 'ais_geo_validation_cache_total';
+export const AIS_GEO_VALIDATION_DURATION_SECONDS = 'ais_geo_validation_duration_seconds';
+export const AIS_GEO_DATASET_ACTIVE_INFO = 'ais_geo_dataset_active_info';
 
 export const DB_QUERY_DURATION_SECONDS = 'db_query_duration_seconds';
 export const DB_WRITES_TOTAL = 'db_writes_total';

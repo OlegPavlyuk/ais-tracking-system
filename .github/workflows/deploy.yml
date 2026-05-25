@@ -39,6 +39,7 @@ jobs:
       deploy_sha: ${{ steps.version.outputs.deploy_sha }}
       backend_image: ${{ steps.version.outputs.backend_image }}
       migrator_image: ${{ steps.version.outputs.migrator_image }}
+      geo_import_image: ${{ steps.version.outputs.geo_import_image }}
       frontend_image: ${{ steps.version.outputs.frontend_image }}
 
     steps:
@@ -55,6 +56,7 @@ jobs:
             echo "deploy_sha=$deploy_sha"
             echo "backend_image=$IMAGE_REGISTRY/backend:$deploy_sha"
             echo "migrator_image=$IMAGE_REGISTRY/migrator:$deploy_sha"
+            echo "geo_import_image=$IMAGE_REGISTRY/geo-import:$deploy_sha"
             echo "frontend_image=$IMAGE_REGISTRY/frontend:$deploy_sha"
           } >> "$GITHUB_OUTPUT"
 
@@ -94,6 +96,15 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_REGISTRY }}/migrator:${{ steps.version.outputs.deploy_sha }}
 
+      - name: Build and push geo import
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: geo-import
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/geo-import:${{ steps.version.outputs.deploy_sha }}
+
       - name: Build and push frontend
         uses: docker/build-push-action@v6
         with:
@@ -107,8 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-and-push
-    environment:
-      name: production
+    environment: production
 
     steps:
       - name: Checkout
@@ -176,5 +186,6 @@ jobs:
             echo "- SHA: \`${{ needs.build-and-push.outputs.deploy_sha }}\`"
             echo "- Backend: \`${{ needs.build-and-push.outputs.backend_image }}\`"
             echo "- Migrator: \`${{ needs.build-and-push.outputs.migrator_image }}\`"
+            echo "- Geo import: \`${{ needs.build-and-push.outputs.geo_import_image }}\`"
             echo "- Frontend: \`${{ needs.build-and-push.outputs.frontend_image }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

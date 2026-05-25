@@ -1,0 +1,77 @@
+{
+  "metadataVersion": "production-initial-osm-geofabrik-v1",
+  "description": "Initial minimal production-like geo-validation dataset manifest. Imports OSMData land/water plus a verified Geofabrik Freiburg Regierungsbezirk Upper Rhine slice before expanding to larger Rhine corridor extracts.",
+  "sources": [
+    {
+      "name": "osmdata-land-polygons-split-4326",
+      "type": "land",
+      "purpose": "land_rejection",
+      "notes": "Baseline land coverage used to reject deep-land AIS positions. OSMData says this dataset contains land polygons derived from OSM natural=coastline, split into smaller WGS84 chunks for easier processing.",
+      "region": "global clipped to AIS coverage",
+      "sourceLayer": "land_polygons",
+      "targetTable": "geo_land_polygons",
+      "url": "https://osmdata.openstreetmap.de/download/land-polygons-split-4326.zip",
+      "archivePath": "land-polygons-split-4326/land_polygons.shp",
+      "license": "ODbL; OSM-derived OSMData land polygons.",
+      "attribution": "OpenStreetMap contributors; OSMData openstreetmap.de",
+      "pinnedVersion": "latest-as-of-import; record importStartedAt in geo_dataset_versions.source_metadata"
+    },
+    {
+      "name": "osmdata-water-polygons-split-4326",
+      "type": "navigable_water",
+      "purpose": "coastal_open_water_validation",
+      "notes": "Sea/open-water coverage used to allow ocean and coastal water before land rejection. OSMData documents this as oceans and seas from natural=coastline only; it intentionally does not cover lakes, reservoirs, rivers, or canals.",
+      "region": "global clipped to AIS coverage",
+      "sourceLayer": "water_polygons",
+      "targetTable": "geo_navigable_water_polygons",
+      "url": "https://osmdata.openstreetmap.de/download/water-polygons-split-4326.zip",
+      "archivePath": "water-polygons-split-4326/water_polygons.shp",
+      "license": "ODbL; OSM-derived OSMData water polygons.",
+      "attribution": "OpenStreetMap contributors; OSMData openstreetmap.de",
+      "pinnedVersion": "latest-as-of-import; record importStartedAt in geo_dataset_versions.source_metadata"
+    },
+    {
+      "name": "geofabrik-upper-rhine-freiburg-regbez-waterways",
+      "type": "navigable_water",
+      "purpose": "inland_navigable_river_canal_coverage",
+      "notes": "Upper Rhine coverage on the Baden-Wuerttemberg/Freiburg side near Basel, Rheinfelden, Freiburg, and connected canals. Selected river/canal line features are buffered into polygons at import time so runtime remains polygon-only.",
+      "region": "Germany Baden-Wuerttemberg Freiburg Regierungsbezirk clipped to AIS coverage",
+      "sourceLayer": "geofabrik_waterways",
+      "targetTable": "geo_navigable_water_polygons",
+      "ogrLayer": "gis_osm_waterways_free",
+      "geometryOperation": "line_buffer",
+      "includeFclasses": [
+        "river",
+        "canal"
+      ],
+      "defaultLineBufferMeters": 75,
+      "url": "https://download.geofabrik.de/europe/germany/baden-wuerttemberg/freiburg-regbez-latest-free.gpkg.zip",
+      "archivePath": "freiburg-regbez.gpkg",
+      "license": "ODbL; OSM-derived Geofabrik free extract.",
+      "attribution": "OpenStreetMap contributors; Geofabrik GmbH",
+      "pinnedVersion": "latest-as-of-import; record importStartedAt in geo_dataset_versions.source_metadata"
+    },
+    {
+      "name": "geofabrik-upper-rhine-freiburg-regbez-water-polygons",
+      "type": "navigable_water",
+      "purpose": "inland_water_area_coverage",
+      "notes": "Mapped inland water polygons for Freiburg Regierungsbezirk upper Rhine areas, ports, docks, reservoirs, and broad water polygons where source data supports them.",
+      "region": "Germany Baden-Wuerttemberg Freiburg Regierungsbezirk clipped to AIS coverage",
+      "sourceLayer": "geofabrik_water",
+      "targetTable": "geo_navigable_water_polygons",
+      "ogrLayer": "gis_osm_water_a_free",
+      "geometryOperation": "polygon",
+      "includeFclasses": [
+        "river",
+        "dock",
+        "reservoir",
+        "water"
+      ],
+      "url": "https://download.geofabrik.de/europe/germany/baden-wuerttemberg/freiburg-regbez-latest-free.gpkg.zip",
+      "archivePath": "freiburg-regbez.gpkg",
+      "license": "ODbL; OSM-derived Geofabrik free extract.",
+      "attribution": "OpenStreetMap contributors; Geofabrik GmbH",
+      "pinnedVersion": "latest-as-of-import; record importStartedAt in geo_dataset_versions.source_metadata"
+    }
+  ]
+}

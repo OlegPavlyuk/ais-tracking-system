@@ -17,6 +17,15 @@ COPY drizzle ./drizzle
 COPY scripts ./scripts
 CMD ["sh", "-c", "test -n \"$DATABASE_URL\" && pnpm migrate && pnpm partition:maintain"]
 
+FROM deps AS geo-import
+ENV NODE_ENV=production
+RUN apk add --no-cache gdal gdal-tools
+COPY tsconfig*.json drizzle.config.ts ./
+COPY src ./src
+COPY scripts ./scripts
+COPY data ./data
+CMD ["pnpm", "geo:import"]
+
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production

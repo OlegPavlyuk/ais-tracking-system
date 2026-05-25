@@ -2,6 +2,8 @@ export const DROP_REASONS = [
   'duplicate',
   'sampled',
   'out_of_bbox',
+  'on_land',
+  'geo_validation_error',
   'non_vessel_mmsi',
   'invalid',
 ] as const;

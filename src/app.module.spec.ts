@@ -1,3 +1,4 @@
+import { MODULE_METADATA } from '@nestjs/common/constants';
 import { AppModule } from './app.module';
 import { ApiModule } from './api/api.module';
 import { IngestionModule } from './ingestion/ingestion.module';
@@ -6,6 +7,7 @@ import { StorageModule } from './storage/storage.module';
 import { EnrichmentModule } from './enrichment/enrichment.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { AdminModule } from './admin/admin.module';
+import { GeoModule } from './geo/geo.module';
 
 describe('AppModule role composition', () => {
   function importsFor(role: 'all' | 'api' | 'ingestion' | 'worker'): unknown[] {
@@ -25,6 +27,10 @@ describe('AppModule role composition', () => {
     );
     expect(importsFor('api')).not.toEqual(
       expect.arrayContaining([IngestionModule, PipelineModule]),
+    );
+
+    expect(Reflect.getMetadata(MODULE_METADATA.IMPORTS, PipelineModule)).toEqual(
+      expect.arrayContaining([GeoModule]),
     );
 
     expect(importsFor('worker')).toContain(EnrichmentModule);

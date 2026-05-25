@@ -61,6 +61,7 @@ cp "$PREVIOUS_METADATA" "$RELEASE_ENV"
 
 echo "Rolling back containers using $APP_DIR/$PREVIOUS_METADATA"
 compose pull
+compose pull geo-import
 compose up -d --remove-orphans
 AIS_DEPLOY_USE_SUDO_DOCKER="${AIS_DEPLOY_USE_SUDO_DOCKER:-false}" SMOKE_BASE_URL="$SMOKE_BASE_URL" scripts/deploy/smoke-check.sh
 
