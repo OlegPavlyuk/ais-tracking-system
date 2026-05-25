@@ -228,6 +228,7 @@ Verify GDAL exists only in the import image:
 ```bash
 compose run --rm --entrypoint ogr2ogr geo-import --version
 compose run --rm --entrypoint gdalinfo geo-import --version
+compose run --rm --entrypoint ogr2ogr geo-import --formats | grep -i PostgreSQL
 ```
 
 Run the one-off import. `geo-import` is profile-gated and has `restart: "no"`,

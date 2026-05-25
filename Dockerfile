@@ -19,7 +19,7 @@ CMD ["sh", "-c", "test -n \"$DATABASE_URL\" && pnpm migrate && pnpm partition:ma
 
 FROM deps AS geo-import
 ENV NODE_ENV=production
-RUN apk add --no-cache gdal gdal-tools
+RUN apk add --no-cache gdal gdal-driver-pg gdal-tools
 COPY tsconfig*.json drizzle.config.ts ./
 COPY src ./src
 COPY scripts ./scripts
