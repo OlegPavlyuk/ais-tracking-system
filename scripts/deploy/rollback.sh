@@ -51,6 +51,33 @@ compose() {
   docker_cmd compose --env-file "$PROD_ENV" --env-file "$RELEASE_ENV" "${compose_files[@]}" "$@"
 }
 
+release_env_has_geo_import_image() {
+  local release_env="$1"
+  [[ -f "$release_env" ]] || return 1
+
+  awk -F= '
+    /^[[:space:]]*AIS_GEO_IMPORT_IMAGE=/ {
+      value = $0
+      sub(/^[[:space:]]*AIS_GEO_IMPORT_IMAGE=/, "", value)
+      sub(/[[:space:]]+#.*$/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^"|"$/, "", value)
+      gsub(/^'\''|'\''$/, "", value)
+      if (value != "") found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' "$release_env"
+}
+
+pull_geo_import_if_configured() {
+  local release_env="$1"
+  if release_env_has_geo_import_image "$release_env"; then
+    compose pull geo-import
+  else
+    echo "Skipping geo-import image pull; $release_env does not define AIS_GEO_IMPORT_IMAGE."
+  fi
+}
+
 rollback_from=""
 if [[ -f "$CURRENT_METADATA" ]]; then
   rollback_from="$RELEASE_DIR/rollback-from-$(date -u +%Y%m%dT%H%M%SZ).env"
@@ -61,7 +88,7 @@ cp "$PREVIOUS_METADATA" "$RELEASE_ENV"
 
 echo "Rolling back containers using $APP_DIR/$PREVIOUS_METADATA"
 compose pull
-compose pull geo-import
+pull_geo_import_if_configured "$RELEASE_ENV"
 compose up -d --remove-orphans
 AIS_DEPLOY_USE_SUDO_DOCKER="${AIS_DEPLOY_USE_SUDO_DOCKER:-false}" SMOKE_BASE_URL="$SMOKE_BASE_URL" scripts/deploy/smoke-check.sh
 
