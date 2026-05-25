@@ -173,6 +173,148 @@ If a migration was not backward-compatible, rollback may require a database
 restore or a corrective migration. Read `docs/restore-drill.md` before doing
 that on production data.
 
+## GeoValidation Rollout
+
+GeoValidation uses PostGIS tables populated by a dedicated GDAL-enabled
+`geo-import` image. The `api`, `ingestion`, and `worker` runtime images must not
+contain GDAL.
+
+For the first rollout, keep `.env.production` conservative until the import and
+probes are verified:
+
+```text
+AIS_PROVIDERS=
+GEO_VALIDATION_ENABLED=false
+GEO_VALIDATION_FAIL_OPEN=true
+```
+
+The rollout order is always:
+
+```text
+migrations -> geo-import -> verification -> enable geo validation -> enable ingestion
+```
+
+Define a shell helper for the production compose command:
+
+```bash
+cd /opt/ais-tracking-system
+export AIS_DEPLOY_USE_SUDO_DOCKER=true
+
+compose() {
+  sudo docker compose \
+    --env-file .env.production \
+    --env-file .env.release \
+    -f docker-compose.prod.yml \
+    -f docker-compose.prod.grafana-local.yml \
+    "$@"
+}
+```
+
+Before first import, confirm the release metadata points at the immutable import
+image tag for the deployed SHA:
+
+```bash
+grep -E '^(DEPLOY_SHA|AIS_GEO_IMPORT_IMAGE)=' .env.release
+```
+
+Run migrations first:
+
+```bash
+compose run --rm migrate
+```
+
+Verify GDAL exists only in the import image:
+
+```bash
+compose run --rm --entrypoint ogr2ogr geo-import --version
+compose run --rm --entrypoint gdalinfo geo-import --version
+```
+
+Run the one-off import. `geo-import` is profile-gated and has `restart: "no"`,
+so ordinary `compose up -d` does not start it.
+
+```bash
+compose run --rm geo-import
+```
+
+Check the imported active dataset:
+
+```bash
+compose exec postgres psql -U ais -d ais -c "
+SELECT id, version, is_active, activated_at, coverage_margin_km, coastal_tolerance_meters
+FROM geo_dataset_versions
+ORDER BY created_at DESC
+LIMIT 5;
+"
+
+compose exec postgres psql -U ais -d ais -c "
+SELECT count(*) AS active_versions
+FROM geo_dataset_versions
+WHERE is_active;
+"
+```
+
+Expected `active_versions` is `1`.
+
+Run representative probes:
+
+```bash
+compose exec postgres psql -U ais -d ais -c "
+SELECT 'rhine_basel_1' AS probe, geo_validate_position(7.58678, 47.56220333333333)
+UNION ALL
+SELECT 'rhine_basel_2', geo_validate_position(7.575641666666667, 47.61412833333333)
+UNION ALL
+SELECT 'rhine_rheinfelden', geo_validate_position(7.7906, 47.5596)
+UNION ALL
+SELECT 'nearby_basel_land', geo_validate_position(7.6100, 47.5600);
+"
+```
+
+After import and probes pass, enable validation but keep fail-open:
+
+```text
+GEO_VALIDATION_ENABLED=true
+GEO_VALIDATION_FAIL_OPEN=true
+```
+
+Restart backend runtime services and smoke check:
+
+```bash
+compose up -d api worker nginx
+AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/smoke-check.sh
+```
+
+Then enable ingestion:
+
+```text
+AIS_PROVIDERS=aisstream
+```
+
+```bash
+compose up -d ingestion
+compose logs --tail=300 ingestion
+```
+
+For future dataset refreshes, keep the app online and run only:
+
+```bash
+compose run --rm geo-import
+```
+
+The import loads a new inactive dataset version, validates it, and swaps the
+active version only after success. If import fails, the previous active dataset
+remains active.
+
+Fast disable for validation problems:
+
+```text
+GEO_VALIDATION_ENABLED=false
+```
+
+```bash
+compose up -d api ingestion worker
+```
+
 ## Private Grafana
 
 From your laptop:
