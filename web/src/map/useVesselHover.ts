@@ -1,28 +1,45 @@
 import { useEffect } from 'react';
 import type { Map as MlMap, MapMouseEvent, PointLike } from 'maplibre-gl';
 import { MapViewIds } from './mapViewIds';
+import { navStatusLabel } from '@/lib/navStatusLabel';
 import { relativeTime } from '@/lib/relativeTime';
+import { useVesselsStore } from '@/store/vessels';
 
 const QUERY_RADIUS = 4; // px around cursor
 const TOOLTIP_OFFSET = 12;
 const TOOLTIP_MARGIN = 8;
 
-function buildPopupContent(props: Record<string, unknown>): HTMLElement {
-  const title = String(props.vesselName ?? props.mmsi ?? '');
-  const status = String(props.navStatusLabel ?? '—');
-  const lastSeen = relativeTime(typeof props.occurredAt === 'string' ? props.occurredAt : null);
+interface HoverContent {
+  mmsi: string;
+  title: string;
+  navStatus: string;
+  updatedAt: string | null;
+}
+
+function contentFromMmsi(mmsi: string): HoverContent {
+  const vessel = useVesselsStore.getState().vessels.get(mmsi);
+  return {
+    mmsi,
+    title: vessel?.name ?? mmsi,
+    navStatus: vessel ? navStatusLabel(vessel.navStatus) : '—',
+    updatedAt: vessel?.occurredAt ?? vessel?.lastSeenAt ?? null,
+  };
+}
+
+function buildPopupContent(content: HoverContent): HTMLElement {
+  const lastSeen = relativeTime(content.updatedAt);
 
   const root = document.createElement('div');
   root.className = 'vessel-hover-card';
 
   const h = document.createElement('div');
   h.className = 'vessel-hover-card-title';
-  h.textContent = title;
+  h.textContent = content.title;
   root.appendChild(h);
 
   const s = document.createElement('div');
   s.className = 'vessel-hover-card-row';
-  s.textContent = status;
+  s.textContent = content.navStatus;
   root.appendChild(s);
 
   const t = document.createElement('div');
@@ -70,19 +87,19 @@ function placeTooltipOverlay(map: MlMap, overlay: HTMLElement, coords: [number, 
   overlay.style.top = `${Math.round(clamp(top, TOOLTIP_MARGIN, maxTop))}px`;
 }
 
-function showTooltip(map: MlMap, overlay: HTMLElement, props: Record<string, unknown>, coords: [number, number]): void {
-  overlay.replaceChildren(buildPopupContent(props));
+function showTooltip(map: MlMap, overlay: HTMLElement, content: HoverContent, coords: [number, number]): void {
+  overlay.replaceChildren(buildPopupContent(content));
   overlay.hidden = false;
   placeTooltipOverlay(map, overlay, coords);
 }
 
 // Signature that changes whenever popup content needs to refresh:
 // vessel identity + last update time + nav status + current map position.
-function featureSig(props: Record<string, unknown>, coords: [number, number]): string {
+function featureSig(content: HoverContent, coords: [number, number]): string {
   return [
-    String(props.mmsi ?? ''),
-    String(props.occurredAt ?? ''),
-    String(props.navStatusLabel ?? ''),
+    content.mmsi,
+    content.updatedAt ?? '',
+    content.navStatus,
     coords[0].toFixed(5),
     coords[1].toFixed(5),
   ].join('|');
@@ -99,6 +116,12 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
     let rafId: number | null = null;
     let currentSig: string | null = null;
 
+    const hideStaleTooltip = () => {
+      if (currentSig === null) return;
+      hideTooltip(overlay);
+      currentSig = null;
+    };
+
     const process = () => {
       rafId = null;
       const pt = pendingPoint;
@@ -112,10 +135,7 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
       const features = map.queryRenderedFeatures(bbox, { layers: layerIds });
 
       if (!features.length) {
-        if (currentSig !== null) {
-          hideTooltip(overlay);
-          currentSig = null;
-        }
+        hideStaleTooltip();
         return;
       }
 
@@ -135,13 +155,22 @@ export function useVesselHover(map: MlMap | null, disabled = false): void {
       }
 
       const props = best.properties;
-      if (!props) return;
+      if (!props) {
+        hideStaleTooltip();
+        return;
+      }
+      const mmsi = props.mmsi;
+      if (typeof mmsi !== 'string' || mmsi.length === 0) {
+        hideStaleTooltip();
+        return;
+      }
       const coords = (best.geometry as unknown as { coordinates: [number, number] }).coordinates;
-      const sig = featureSig(props, coords as [number, number]);
+      const content = contentFromMmsi(mmsi);
+      const sig = featureSig(content, coords as [number, number]);
       if (sig === currentSig) return;
 
       currentSig = sig;
-      showTooltip(map, overlay, props, coords as [number, number]);
+      showTooltip(map, overlay, content, coords as [number, number]);
     };
 
     const moveHandler = (e: MapMouseEvent) => {

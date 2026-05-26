@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVesselHover } from './useVesselHover';
+import { useVesselsStore } from '@/store/vessels';
+import type { Vessel } from '@/store/types';
 
 const popupState = vi.hoisted(() => ({
   instances: [] as Array<{ element: HTMLDivElement }>,
@@ -89,6 +91,31 @@ function createMockMap(): MockMap {
   };
 }
 
+function makeVessel(overrides: Partial<Vessel> = {}): Vessel {
+  return {
+    mmsi: '123456789',
+    vesselId: null,
+    lastSeenAt: null,
+    lat: 43,
+    lon: 30,
+    sog: null,
+    cog: null,
+    trueHeading: null,
+    navStatus: null,
+    occurredAt: null,
+    imo: null,
+    name: null,
+    callSign: null,
+    shipType: null,
+    destination: null,
+    staticOccurredAt: null,
+    sanctionsStatus: null,
+    sanctionsCheckedAt: null,
+    sanctionsMatches: null,
+    ...overrides,
+  };
+}
+
 function HookHarness({ map, disabled }: { map: MockMap; disabled: boolean }) {
   useVesselHover(map as never, disabled);
   return null;
@@ -96,6 +123,20 @@ function HookHarness({ map, disabled }: { map: MockMap; disabled: boolean }) {
 
 beforeEach(() => {
   popupState.instances.length = 0;
+  useVesselsStore.setState({
+    vessels: new Map([
+      [
+        '123456789',
+        makeVessel({
+          name: 'HOVER VESSEL',
+          navStatus: 0,
+          occurredAt: '2024-01-01T00:00:00.000Z',
+        }),
+      ],
+    ]),
+    wsStatus: 'idle',
+    error: null,
+  });
   let rafId = 0;
   const rafCallbacks = new Map<number, FrameRequestCallback>();
 
@@ -124,6 +165,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
+  useVesselsStore.setState({ vessels: new Map(), wsStatus: 'idle', error: null });
 });
 
 describe('useVesselHover', () => {
@@ -134,9 +176,6 @@ describe('useVesselHover', () => {
         geometry: { coordinates: [30, 43] },
         properties: {
           mmsi: '123456789',
-          vesselName: 'HOVER VESSEL',
-          navStatusLabel: 'Under way',
-          occurredAt: '2024-01-01T00:00:00.000Z',
         },
       },
     ]);
@@ -146,6 +185,8 @@ describe('useVesselHover', () => {
     map.handlers.mousemove?.[0]?.({ point: { x: 30, y: 43 } });
 
     expect(await screen.findByText('HOVER VESSEL')).toBeInTheDocument();
+    expect(screen.getByText('Under way (engine)')).toBeInTheDocument();
+    expect(screen.getByText(/Updated/)).toBeInTheDocument();
 
     rerender(<HookHarness map={map} disabled />);
 
@@ -171,9 +212,6 @@ describe('useVesselHover', () => {
       geometry: { coordinates: [30, 43] },
       properties: {
         mmsi: '123456789',
-        vesselName: 'HOVER VESSEL',
-        navStatusLabel: 'Under way',
-        occurredAt: '2024-01-01T00:00:00.000Z',
       },
     };
     map.queryRenderedFeatures.mockReturnValue([feature]);
@@ -204,5 +242,26 @@ describe('useVesselHover', () => {
     expect(map.getContainer().querySelector('.vessel-hover-overlay')).toBeNull();
     expect(map.handlers.mousemove).toHaveLength(0);
     expect(map.handlers.mouseout).toHaveLength(0);
+  });
+
+  it('falls back to MMSI and empty status when feature exists but vessel is missing from store', async () => {
+    useVesselsStore.setState({ vessels: new Map() });
+    const map = createMockMap();
+    map.queryRenderedFeatures.mockReturnValue([
+      {
+        geometry: { coordinates: [30, 43] },
+        properties: {
+          mmsi: '123456789',
+        },
+      },
+    ]);
+
+    render(<HookHarness map={map} disabled={false} />);
+
+    map.handlers.mousemove?.[0]?.({ point: { x: 30, y: 43 } });
+
+    expect(await screen.findByText('123456789')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('Updated —')).toBeInTheDocument();
   });
 });
