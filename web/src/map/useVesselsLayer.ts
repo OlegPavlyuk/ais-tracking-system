@@ -7,7 +7,7 @@ import { MapViewIds } from './mapViewIds';
 export { buildFeatureCollection } from './buildFeatureCollection';
 export type { VesselFeatureCollection } from './buildFeatureCollection';
 
-const FLUSH_MS = 100;
+const FLUSH_MS = 500;
 
 export function useVesselsLayer(map: MlMap | null): void {
   useEffect(() => {
@@ -18,6 +18,20 @@ export function useVesselsLayer(map: MlMap | null): void {
     let rafId: number | null = null;
     let pending = false;
     let disposed = false;
+    let moving = false;
+    let dirtyWhileMoving = false;
+
+    const clearScheduled = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      pending = false;
+    };
 
     const flush = () => {
       timeoutId = null;
@@ -25,6 +39,11 @@ export function useVesselsLayer(map: MlMap | null): void {
       rafId = requestAnimationFrame(() => {
         rafId = null;
         if (disposed) return;
+        if (moving) {
+          dirtyWhileMoving = true;
+          pending = false;
+          return;
+        }
         const source = map.getSource(MapViewIds.vesselsSourceId) as GeoJSONSource | undefined;
         if (source) {
           source.setData(
@@ -38,13 +57,34 @@ export function useVesselsLayer(map: MlMap | null): void {
       });
     };
 
-    const schedule = () => {
+    const schedule = (force = false) => {
+      if (moving && !force) {
+        dirtyWhileMoving = true;
+        return;
+      }
       if (pending) return;
       pending = true;
       const elapsed = performance.now() - lastFlush;
-      const wait = Math.max(0, FLUSH_MS - elapsed);
+      const wait = force ? 0 : Math.max(0, FLUSH_MS - elapsed);
       timeoutId = setTimeout(flush, wait);
     };
+
+    const handleMoveStart = () => {
+      moving = true;
+      dirtyWhileMoving = dirtyWhileMoving || pending;
+      clearScheduled();
+    };
+
+    const handleMoveEnd = () => {
+      moving = false;
+      if (dirtyWhileMoving) {
+        dirtyWhileMoving = false;
+        schedule(true);
+      }
+    };
+
+    map.on('movestart', handleMoveStart);
+    map.on('moveend', handleMoveEnd);
 
     schedule();
     const unsub = useVesselsStore.subscribe((s, prev) => {
@@ -54,8 +94,9 @@ export function useVesselsLayer(map: MlMap | null): void {
     return () => {
       disposed = true;
       unsub();
-      if (timeoutId !== null) clearTimeout(timeoutId);
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      map.off('movestart', handleMoveStart);
+      map.off('moveend', handleMoveEnd);
+      clearScheduled();
     };
   }, [map]);
 }

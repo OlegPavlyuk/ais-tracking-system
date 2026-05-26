@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { render, cleanup, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { GeoJSONSource, Map as MlMap } from 'maplibre-gl';
 import { buildFeatureCollection } from './buildFeatureCollection';
+import { useVesselsLayer } from './useVesselsLayer';
+import { useVesselsStore } from '@/store/vessels';
 import type { Vessel } from '@/store/types';
 
 function makeVessel(overrides: Partial<Vessel> = {}): Vessel {
@@ -26,6 +31,114 @@ function makeVessel(overrides: Partial<Vessel> = {}): Vessel {
     ...overrides,
   };
 }
+
+class FakeMap {
+  readonly source = {
+    setData: vi.fn(),
+  };
+
+  private readonly handlers = new Map<string, Set<() => void>>();
+
+  getSource(): GeoJSONSource {
+    return this.source as unknown as GeoJSONSource;
+  }
+
+  on(type: string, handler: () => void): this {
+    const handlers = this.handlers.get(type) ?? new Set<() => void>();
+    handlers.add(handler);
+    this.handlers.set(type, handlers);
+    return this;
+  }
+
+  off(type: string, handler: () => void): this {
+    this.handlers.get(type)?.delete(handler);
+    return this;
+  }
+
+  emit(type: string): void {
+    for (const handler of this.handlers.get(type) ?? []) {
+      handler();
+    }
+  }
+}
+
+function HookHarness({ map }: { map: MlMap }) {
+  useVesselsLayer(map);
+  return null;
+}
+
+function advanceTimers(ms: number): void {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
+
+function flushPendingTimers(): void {
+  act(() => {
+    vi.runOnlyPendingTimers();
+  });
+  act(() => {
+    vi.runOnlyPendingTimers();
+  });
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((cb: FrameRequestCallback) =>
+      window.setTimeout(() => cb(performance.now()), 0),
+    ),
+  );
+  vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => window.clearTimeout(id)));
+  useVesselsStore.setState({
+    vessels: new Map([['a', makeVessel()]]),
+    wsStatus: 'idle',
+    error: null,
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  useVesselsStore.setState({ vessels: new Map(), wsStatus: 'idle', error: null });
+});
+
+describe('useVesselsLayer', () => {
+  it('flushes vessel source updates on the 500ms cadence', () => {
+    const map = new FakeMap();
+    render(React.createElement(HookHarness, { map: map as unknown as MlMap }));
+
+    advanceTimers(499);
+    expect(map.source.setData).not.toHaveBeenCalled();
+
+    advanceTimers(1);
+    flushPendingTimers();
+    expect(map.source.setData).toHaveBeenCalledTimes(1);
+  });
+
+  it('defers source updates while the map is moving and flushes once after moveend', () => {
+    const map = new FakeMap();
+    render(React.createElement(HookHarness, { map: map as unknown as MlMap }));
+
+    act(() => map.emit('movestart'));
+    advanceTimers(1_000);
+    expect(map.source.setData).not.toHaveBeenCalled();
+
+    act(() => {
+      useVesselsStore.setState((state) => ({
+        vessels: new Map([...state.vessels, ['b', makeVessel({ mmsi: '987654321' })]]),
+      }));
+    });
+    advanceTimers(1_000);
+    expect(map.source.setData).not.toHaveBeenCalled();
+
+    act(() => map.emit('moveend'));
+    flushPendingTimers();
+    expect(map.source.setData).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('buildFeatureCollection', () => {
   it('skips vessels without coordinates', () => {
