@@ -147,7 +147,7 @@ describe('buildFeatureCollection', () => {
     expect(fc.features).toHaveLength(0);
   });
 
-  it('includes mmsi, rotation, shipType, and color in feature properties', () => {
+  it('includes only lightweight render properties in each feature', () => {
     const vessels = new Map([
       [
         'a',
@@ -162,9 +162,15 @@ describe('buildFeatureCollection', () => {
     const fc = buildFeatureCollection(vessels);
     expect(fc.features).toHaveLength(1);
     const props = fc.features[0]!.properties;
+    expect(Object.keys(props).sort()).toEqual([
+      'color',
+      'markerShape',
+      'mmsi',
+      'rotation',
+      'sanctionsStatus',
+    ]);
     expect(props.mmsi).toBe('123456789');
     expect(props.rotation).toBe(90);
-    expect(props.shipType).toBe(70);
     expect(props.color).toBe('#2ECC71'); // Cargo
     expect(props.sanctionsStatus).toBe('candidate');
   });
@@ -225,18 +231,6 @@ describe('buildFeatureCollection', () => {
     expect(fc.features[0]!.geometry.coordinates).toEqual([33.5, 44.2]);
   });
 
-  it('includes readable navStatusLabel in properties', () => {
-    const vessels = new Map([['a', makeVessel({ navStatus: 0 })]]);
-    const fc = buildFeatureCollection(vessels);
-    expect(fc.features[0]!.properties.navStatusLabel).toBe('Under way (engine)');
-  });
-
-  it('navStatusLabel is — when navStatus is null', () => {
-    const vessels = new Map([['a', makeVessel({ navStatus: null })]]);
-    const fc = buildFeatureCollection(vessels);
-    expect(fc.features[0]!.properties.navStatusLabel).toBe('—');
-  });
-
   it('sets markerShape to circle for At anchor (1)', () => {
     const vessels = new Map([['a', makeVessel({ navStatus: 1 })]]);
     const fc = buildFeatureCollection(vessels);
@@ -267,28 +261,4 @@ describe('buildFeatureCollection', () => {
     expect(fc.features[0]!.properties.markerShape).toBe('circle');
   });
 
-  it('includes occurredAt in feature properties', () => {
-    const ts = '2025-06-01T10:00:00.000Z';
-    const vessels = new Map([['a', makeVessel({ occurredAt: ts })]]);
-    const fc = buildFeatureCollection(vessels);
-    expect(fc.features[0]!.properties.occurredAt).toBe(ts);
-  });
-
-  it('occurredAt is null when not set', () => {
-    const vessels = new Map([['a', makeVessel({ occurredAt: null })]]);
-    const fc = buildFeatureCollection(vessels);
-    expect(fc.features[0]!.properties.occurredAt).toBeNull();
-  });
-
-  it('includes vesselName in feature properties', () => {
-    const vessels = new Map([['a', makeVessel({ name: 'EVER GIVEN' })]]);
-    const fc = buildFeatureCollection(vessels);
-    expect(fc.features[0]!.properties.vesselName).toBe('EVER GIVEN');
-  });
-
-  it('vesselName is null when name is not set', () => {
-    const vessels = new Map([['a', makeVessel({ name: null })]]);
-    const fc = buildFeatureCollection(vessels);
-    expect(fc.features[0]!.properties.vesselName).toBeNull();
-  });
 });

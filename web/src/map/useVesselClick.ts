@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { Map as MlMap, MapMouseEvent, MapLayerMouseEvent } from 'maplibre-gl';
 import { MapViewIds } from './mapViewIds';
+import { useVesselsStore } from '@/store/vessels';
 
 export function useVesselClick(
   map: MlMap | null,
@@ -17,14 +18,14 @@ export function useVesselClick(
 
     const clickHandler = (e: MapLayerMouseEvent) => {
       const mmsi = e.features?.[0]?.properties?.mmsi;
-      const vesselId = e.features?.[0]?.properties?.vesselId;
       const coordinates = (
         e.features?.[0]?.geometry as { coordinates?: [number, number] } | undefined
       )?.coordinates;
       if (typeof mmsi === 'string' && mmsi.length > 0) {
+        const vesselId = useVesselsStore.getState().vessels.get(mmsi)?.vesselId ?? null;
         onSelect({
           mmsi,
-          vesselId: typeof vesselId === 'string' ? vesselId : null,
+          vesselId,
           anchorLngLat:
             Array.isArray(coordinates) && coordinates.length === 2
               ? coordinates
