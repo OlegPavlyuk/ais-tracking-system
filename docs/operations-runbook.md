@@ -55,6 +55,11 @@ Run the same smoke checks used by deployment:
 AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/smoke-check.sh
 ```
 
+The deployment smoke script checks local Nginx readiness at
+`http://localhost/nginx-health`, verifies that normal HTTP app routes redirect
+to HTTPS, then verifies app health/API routes over HTTPS with `-k` so first
+bootstrap works before the Let's Encrypt certificate exists.
+
 Public checks from your laptop:
 
 ```bash
