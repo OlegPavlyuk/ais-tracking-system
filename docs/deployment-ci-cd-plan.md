@@ -791,8 +791,10 @@ Risks / things to verify:
 Goal: move from static-IP HTTP to domain-based HTTPS.
 
 Likely files:
-- `docker/nginx/*`
+- `web/nginx.conf`
+- `web/docker-entrypoint.d/*`
 - `docker-compose.prod.yml`
+- `docs/https-domain-runbook.md`
 - `docs/gcp-vm-runbook.md`
 - `docs/operations-runbook.md`
 
@@ -925,14 +927,14 @@ When a task is completed, check it off in the same PR.
 
 ### Phase 8 - Domain and HTTPS
 
-- [ ] Document domain/DNS setup.
-- [ ] Add Nginx `server_name` guidance.
-- [ ] Add Certbot or equivalent TLS plan.
-- [ ] Configure HTTP-to-HTTPS redirect.
+- [x] Document domain/DNS setup.
+- [x] Add Nginx `server_name` guidance.
+- [x] Add Certbot or equivalent TLS plan.
+- [x] Configure HTTP-to-HTTPS redirect.
 - [ ] Verify frontend over HTTPS.
 - [ ] Verify REST API over HTTPS.
 - [ ] Verify WebSocket over WSS.
-- [ ] Document certificate renewal.
+- [x] Document certificate renewal.
 - [ ] Consider HSTS after stable HTTPS operation.
 
 ## Recorded Implementation Decisions

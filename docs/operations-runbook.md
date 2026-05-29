@@ -1,10 +1,17 @@
 # Operations Runbook
 
-This runbook covers day-two operation for the first AIS Tracking System
-production-like deployment: one GCP Compute Engine VM running Docker Compose.
+This runbook covers day-two operation for the AIS Tracking System deployment:
+one GCP Compute Engine VM running Docker Compose. Domain and certificate
+operations are covered in `docs/https-domain-runbook.md`.
 
-It intentionally does not cover HTTPS/domain setup, Terraform, Cloud SQL,
-Memorystore, GKE, or Cloud Run.
+It intentionally does not cover Terraform, Cloud SQL, Memorystore, GKE, or
+Cloud Run.
+
+Related runbooks:
+
+- GCP VM setup: `docs/gcp-vm-runbook.md`
+- HTTPS/domain/TLS: `docs/https-domain-runbook.md`
+- Restore drills: `docs/restore-drill.md`
 
 ## Deployment State
 
@@ -51,14 +58,15 @@ AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/smoke-check.sh
 Public checks from your laptop:
 
 ```bash
-curl -fsS http://VM_STATIC_IP/healthz
-curl -fsS http://VM_STATIC_IP/readyz
-curl -fsS "http://VM_STATIC_IP/api/vessels?limit=1"
-curl -i http://VM_STATIC_IP/metrics
-curl -i http://VM_STATIC_IP/admin
+curl -I http://aiswatch.live/
+curl -fsS https://aiswatch.live/healthz
+curl -fsS https://aiswatch.live/readyz
+curl -fsS "https://aiswatch.live/api/vessels?limit=1"
+curl -i https://aiswatch.live/metrics
+curl -i https://aiswatch.live/admin
 ```
 
-`/metrics` and `/admin` should return `404`.
+HTTP should redirect to HTTPS. `/metrics` and `/admin` should return `404`.
 
 ## Logs
 

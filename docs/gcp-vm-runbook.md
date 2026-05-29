@@ -16,14 +16,21 @@ Redis, Nginx, Prometheus, and private Grafana.
 - one static external IP address;
 - one Compute Engine VM;
 - one VM service account that can pull images from Artifact Registry;
-- firewall rules that expose only HTTP publicly and restrict SSH;
+- firewall rules that expose HTTP/HTTPS publicly and restrict SSH;
 - Docker Engine and the Docker Compose plugin on the VM;
 - `/opt/ais-tracking-system` as the stable app directory;
 - a real `.env.production` file on the VM, never committed;
 - private Grafana access through an SSH tunnel.
 
-This phase does not create the GitHub Actions deploy workflow, backups, HTTPS,
-DNS, Cloud SQL, Memorystore, Cloud Run, or public Prometheus/Grafana access.
+This phase does not create Cloud SQL, Memorystore, Cloud Run, or public
+Prometheus/Grafana access. Domain and HTTPS setup is covered in
+`docs/https-domain-runbook.md`.
+
+Related runbooks:
+
+- Day-two operations: `docs/operations-runbook.md`
+- HTTPS/domain/TLS: `docs/https-domain-runbook.md`
+- Restore drills: `docs/restore-drill.md`
 
 ## Recommended Starting Values
 
@@ -201,8 +208,9 @@ gcloud compute addresses list
 
 ## 6. Create Firewall Rules
 
-Only HTTP should be public for the first deployment. SSH should be restricted to
-your current public IP address, or to IAP later.
+Only HTTP and HTTPS should be public. HTTP remains open for redirects and ACME
+HTTP-01 validation. SSH should be restricted to your current public IP address,
+or to IAP later.
 
 Find your current public IP:
 
@@ -225,6 +233,19 @@ gcloud compute firewall-rules create allow-ais-prod-http \
   --priority=1000 \
   --action=ALLOW \
   --rules=tcp:80 \
+  --source-ranges=0.0.0.0/0 \
+  --target-tags="$NETWORK_TAG_HTTP"
+```
+
+Create HTTPS ingress:
+
+```bash
+gcloud compute firewall-rules create allow-ais-prod-https \
+  --network=default \
+  --direction=INGRESS \
+  --priority=1000 \
+  --action=ALLOW \
+  --rules=tcp:443 \
   --source-ranges=0.0.0.0/0 \
   --target-tags="$NETWORK_TAG_HTTP"
 ```
@@ -479,20 +500,21 @@ When images exist in Artifact Registry, verify the VM can pull them:
 docker pull "$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPOSITORY/frontend:GIT_SHA"
 ```
 
-After the stack is started, public checks should be limited to:
+After the stack is started and the certificate is issued, public checks should
+be limited to:
 
 ```bash
-curl -i "http://STATIC_IP/"
-curl -i "http://STATIC_IP/api/vessels?limit=1"
-curl -i "http://STATIC_IP/healthz"
-curl -i "http://STATIC_IP/readyz"
+curl -I "http://aiswatch.live/"
+curl -i "https://aiswatch.live/api/vessels?limit=1"
+curl -i "https://aiswatch.live/healthz"
+curl -i "https://aiswatch.live/readyz"
 ```
 
 These should not be publicly reachable:
 
 ```bash
-curl -i "http://STATIC_IP/metrics"
-curl -i "http://STATIC_IP/admin"
+curl -i "https://aiswatch.live/metrics"
+curl -i "https://aiswatch.live/admin"
 ```
 
 Do not test or expose Postgres, Redis, Prometheus, or Grafana through public
