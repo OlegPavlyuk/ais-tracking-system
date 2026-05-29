@@ -1,420 +1,207 @@
 # AIS Tracking System
 
-Backend-heavy maritime intelligence system for ingesting live AIS vessel traffic,
-normalizing it into a stable event contract, persisting geospatial vessel state,
-screening vessels against sanctions data, and streaming realtime updates to a
-MapLibre web client.
+![Node.js 22](https://img.shields.io/badge/Node.js-22-339933)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6)
+![NestJS](https://img.shields.io/badge/NestJS-10-E0234E)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1)
+![PostGIS](https://img.shields.io/badge/PostGIS-geospatial-008000)
+![Redis Streams](https://img.shields.io/badge/Redis-Streams-DC382D)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
 
-The project is intentionally shaped like a small production system rather than a
-single demo script: it has explicit module ownership, Redis Streams consumer
-groups, transactional PostGIS writes, replayable dead-letter handling, structured
-logs, Prometheus metrics, Grafana dashboards, scheduled sanctions ETL, and a
-role-based deployment model that can be split into independent services later.
+Production-oriented AIS vessel tracking backend for realtime ingestion, event-driven processing, geospatial querying, sanctions enrichment, and operational observability.
 
-## Features
+The system ingests live AIS traffic, normalizes provider-specific messages into canonical events, persists current and historical vessel state in PostGIS, enriches vessels against sanctions data, and streams realtime updates to a MapLibre web client.
 
-- Live AISStream ingestion with provider abstraction and reconnect backoff.
-- Canonical `position` and `static` event contracts validated with Zod.
-- Redis Streams event bus with consumer groups, retries, `XAUTOCLAIM`, and DLQ.
-- Deduplication and adaptive sampling before events reach downstream consumers.
-- PostGIS storage for latest vessel positions and partitioned position history.
-- REST API for vessel snapshots, vessel detail, historical tracks, and sanctions sources.
-- Raw `ws` realtime gateway with per-client bounded queues and slow-client protection.
-- OFAC SDN sanctions import with auditable import runs and idempotent upserts.
-- Per-vessel enrichment loop using BullMQ, deterministic matching, and realtime fanout.
-- JSON logging with event `traceId` correlation across ingestion, storage, realtime, and enrichment.
-- Prometheus metrics and provisioned Grafana dashboard.
-- React + MapLibre frontend with REST snapshot bootstrap and WebSocket merge updates.
+## Motivation
+
+This project was built as a solo backend engineering effort to explore the shape of a production-style realtime data system: ingestion, contracts, async processing, geospatial storage, reliability boundaries, and observability.
+
+The focus is intentionally backend and system design. The map UI is a useful client, but the main work is the pipeline behind it: moving noisy live data through durable queues, storage, enrichment, and realtime delivery without turning the codebase into premature microservices.
+
+## Key Highlights
+
+- AISStream provider adapter with raw filtering, reconnect backoff, and feed health reporting.
+- Versioned Zod contracts for position, static, persisted, and enrichment events.
+- Redis Streams reliability layer with `XAUTOCLAIM`, retry accounting, DLQ, and manual replay.
+- Deduplication, adaptive sampling, coverage filtering, and optional PostGIS geo validation.
+- Transactional PostGIS writes for vessel identity, latest position, and historical tracks.
+- Realtime fanout with bounded WebSocket queues and slow-client protection.
+- OFAC SDN sanctions import plus deterministic matching by IMO, MMSI, and normalized name.
+- Role-based runtime model: `api`, `ingestion`, `worker`, or full local `all`.
+
+## System Characteristics
+
+- Coverage area: configured Mediterranean and Black Sea AIS zones, including the Black Sea, Levant/East Mediterranean, Central/East Mediterranean, and West Mediterranean/Europe.
+- Current production ingestion averages roughly `25-30 msg/s`; throughput is expected to grow as coverage expands and additional AIS providers are added.
+- Redis Streams event backbone with consumer groups for storage, realtime fanout, and enrichment handoff.
+- PostGIS-backed latest-state queries plus append-only, daily partitioned vessel history.
+- WebSocket realtime updates with per-client bounded queues and position coalescing.
+- Local sanctions ETL and asynchronous vessel enrichment using BullMQ workers.
+- Prometheus metrics, structured logs, health/readiness checks, Grafana dashboards, and CI/CD.
 
 ## Architecture
 
-The runtime is a role-sliced modular monolith. The same NestJS image can run all
-modules together for local development or boot a smaller role for production-like
-process separation.
+The README diagram shows the system shape only. Detailed stream, DLQ, enrichment, and operational flows live in [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
-flowchart LR
-  Provider["AISStream WebSocket"] --> Adapter["Provider Adapter<br/>raw filter + health"]
-  Adapter --> Normalizer["Normalizer<br/>canonical AIS events"]
-  Normalizer --> Pipeline["Pipeline<br/>dedup + bbox guard + sampler"]
-  Pipeline --> Events[("Redis Stream<br/>ais.events.v1")]
+flowchart TD
+  Provider["AIS Provider<br/>live vessel traffic"]
+  Pipeline["Ingestion Pipeline<br/>filter, normalize, dedup, sample"]
+  Streams[("Redis Streams<br/>event backbone")]
+  Storage["Storage Service<br/>async consumer"]
+  Database[("PostgreSQL + PostGIS<br/>latest state + history")]
+  Realtime["Realtime Gateway<br/>WebSocket fanout"]
+  Enrichment["Enrichment Workers<br/>sanctions + vessel profile checks"]
+  Client["Web Client<br/>React + MapLibre"]
 
-  Events --> Storage["storage-writer<br/>consumer group"]
-  Storage --> Postgres[("Postgres + PostGIS")]
-  Storage --> Persisted[("Redis Stream<br/>vessel.persisted.v1")]
-
-  Events --> Realtime["realtime-fanout<br/>consumer group"]
-  Realtime --> WS["/ws/positions"]
-  WS --> Web["React MapLibre client"]
-
-  Persisted --> PersistedConsumer["vessel-persisted consumer"]
-  PersistedConsumer --> Requester["VesselEnrichmentRequester"]
-  Requester --> Queue[("BullMQ<br/>enrichment.vessel")]
-  Queue --> Worker["enrichment processor"]
-  Worker --> Postgres
-  Worker --> Enriched[("Redis Stream<br/>vessel.enriched")]
-  Enriched --> Realtime
-  Reconciler["VesselEnrichmentReconciler<br/>unchecked/stale fallback"] --> Requester
-
-  SanctionsJob["scheduled sanctions import"] --> ImportQueue[("BullMQ<br/>sanctions.import")]
-  ImportQueue --> Importer["OFAC adapter + importer"]
-  Importer --> Postgres
+  Provider --> Pipeline
+  Pipeline --> Streams
+  Streams --> Storage
+  Storage --> Database
+  Storage -- "persisted events" --> Streams
+  Streams --> Realtime
+  Realtime --> Client
+  Streams -- "persisted events" --> Enrichment
+  Enrichment --> Database
+  Enrichment -- "enriched events" --> Streams
 ```
 
-### Process Roles
+## Realtime Map
 
-| Role        | Modules                                                        |
-| ----------- | -------------------------------------------------------------- |
-| `all`       | API, admin, ingestion, pipeline, storage, enrichment, realtime |
-| `api`       | REST API, admin endpoints, realtime WebSocket gateway          |
-| `ingestion` | provider ingestion, normalization pipeline, storage writer     |
-| `worker`    | sanctions import and vessel enrichment workers                 |
+![Realtime vessel map](docs/assets/map.png)
 
-This keeps the developer workflow simple while preserving extraction boundaries:
-provider ingestion, API/realtime, storage consumers, and worker workloads can be
-scaled or isolated independently when needed.
+Live vessel positions are bootstrapped from the REST API and then updated through the WebSocket fanout path.
 
-## Technology Stack
+## Engineering Focus
 
-| Area                 | Stack                                                             |
-| -------------------- | ----------------------------------------------------------------- |
-| Backend runtime      | Node.js 22, TypeScript, NestJS                                    |
-| Messaging            | Redis Streams, Redis consumer groups, BullMQ                      |
-| Database             | PostgreSQL 16, PostGIS, Drizzle ORM/migrations                    |
-| Realtime             | Raw `ws` WebSocket server                                         |
-| Validation           | Zod                                                               |
-| Logging              | pino / nestjs-pino                                                |
-| Metrics              | prom-client, nestjs-prometheus, Prometheus                        |
-| Dashboards           | Grafana provisioning                                              |
-| Frontend             | React 18, Vite, MapLibre GL, Zustand, React Query, Tailwind       |
-| Testing              | Jest, ts-jest, Testcontainers, Supertest, Vitest, Testing Library |
-| Local infrastructure | Docker Compose                                                    |
+This repository demonstrates:
 
-## Core Workflows
+- event-driven backend architecture with durable stream boundaries;
+- realtime delivery under backpressure;
+- geospatial data modeling and querying with PostGIS;
+- async enrichment workflows and idempotent background jobs;
+- operational reliability through DLQ/replay, health checks, metrics, and logs;
+- pragmatic service boundaries inside a modular monolith.
 
-### AIS Ingestion
+## Core Design Decisions
 
-1. `AisStreamAdapter` connects to AISStream with configured coverage boxes.
-2. Provider-specific raw filtering rejects unsupported message types and invalid MMSIs.
-3. `AisStreamNormalizer` converts accepted frames into canonical events.
-4. `IngestionPipelineService` applies Redis-backed deduplication, coverage filtering,
-   adaptive sampling, and `traceId` assignment.
-5. Clean events are published to `ais.events.v1`.
+**Canonical contracts at the edge**  
+Provider-specific AIS payloads are converted into versioned internal events before reaching shared consumers. Storage, realtime, and enrichment validate payloads independently.
 
-### Storage
+**Redis Streams over direct calls**  
+Ingestion does not synchronously call storage or WebSocket code. Redis Streams provide consumer isolation, pending recovery, replay capability, and a DLQ path for poison messages.
 
-`StorageWriterConsumer` consumes `ais.events.v1` and validates every payload
-against the canonical contract. Position events are written in one transaction:
+**Storage optimized by access pattern**  
+`vessels` stores identity and enrichment state, `vessel_positions_latest` powers map snapshots, and `vessel_positions_history` stores append-only track data in daily partitions.
 
-- upsert vessel identity by MMSI,
-- upsert `vessel_positions_latest`,
-- append `vessel_positions_history`.
+**Realtime backpressure is explicit**  
+Each WebSocket client has a bounded queue. Newer positions supersede older queued positions for the same MMSI; static and enrichment messages are preserved; slow clients are disconnected.
 
-The latest table supports fast map snapshots. The history table is range
-partitioned by `occurred_at` and powers the track endpoint.
+**Enrichment is asynchronous derived state**  
+Storage emits `vessel.persisted.v1` after successful writes. Enrichment jobs use deterministic IDs, cache/profile checks, freshness guards, and publish `vessel.enriched` for realtime updates.
 
-After a position or static event is successfully persisted, storage publishes a
-small post-persistence domain event to `vessel.persisted.v1`. Publish failures
-are logged but do not fail the storage handler; enrichment is asynchronous
-derived state and missed immediate events are recovered by reconciliation.
+## Tech Stack
 
-### Realtime Delivery
+| Area | Technology |
+| --- | --- |
+| Backend | Node.js 22, TypeScript, NestJS |
+| Messaging | Redis Streams, Redis consumer groups, BullMQ |
+| Database | PostgreSQL 16, PostGIS, Drizzle migrations |
+| Realtime | Raw `ws` WebSocket server |
+| Validation | Zod |
+| Observability | pino, prom-client, Prometheus, Grafana |
+| Frontend | React, Vite, MapLibre GL, Zustand |
+| Testing | Jest, Testcontainers, Vitest, Testing Library |
+| Infrastructure | Docker, Docker Compose, Nginx, GitHub Actions, GCP Artifact Registry |
 
-The frontend starts with `GET /api/vessels`, then subscribes to
-`WS /ws/positions`. Realtime events are merged client-side into a Zustand store.
-Each WebSocket connection has a bounded send queue:
+## Reliability and Scalability
 
-- newer position messages supersede older queued positions for the same MMSI,
-- static and enrichment messages are preserved,
-- clients that cannot keep up are disconnected with an explicit error.
+- Consumer groups isolate storage, realtime, and enrichment workloads.
+- Failed stream handlers are retried, reclaimed with `XAUTOCLAIM`, then moved to `ais.deadletter`.
+- DLQ records retain original stream metadata and can be replayed manually.
+- Redis AOF, Postgres transactions, idempotent history inserts, and timestamp-guarded latest upserts reduce recovery risk.
+- Partition maintenance keeps historical track storage bounded and queryable.
+- Metrics cover ingestion drops, stream lag/pending, handler errors, DB activity, geo validation, enrichment, HTTP, and WebSocket behavior.
 
-### Sanctions Enrichment
+![Grafana observability dashboard](docs/assets/grafana-dashboard.png)
 
-The sanctions subsystem is intentionally ETL-oriented. OFAC SDN vessel entries
-are imported into local tables, and vessel matching happens against local data.
+## API Snapshot
 
-1. `SanctionsScheduler` enqueues a recurring `sanctions.import` job.
-2. `OfacAdapter` downloads or reads SDN XML and extracts vessel entities.
-3. `SanctionsImporterService` writes import audit rows and idempotently upserts entities.
-4. `StorageWriterConsumer` publishes `vessel.persisted.v1` only after the
-   vessel write succeeds.
-5. `VesselPersistedConsumer` validates that event and calls
-   `VesselEnrichmentRequester`.
-6. `VesselEnrichmentRequester` owns enqueue decisions: discovered vessels,
-   profile-hash changes, and missing checked-cache entries become deterministic
-   BullMQ jobs; fresh vessels are skipped.
-7. `VesselEnrichmentReconciler` periodically scans only unchecked or stale
-   vessels and calls the same requester. It is a recovery mechanism for missed
-   immediate events, not a scanner for every fresh profile change.
-8. `EnrichmentProcessor` matches by IMO, MMSI, then normalized name candidate,
-   applies a freshness-guarded update, and publishes `vessel.enriched`.
+Representative endpoints:
 
-## API Overview
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/vessels` | Latest vessel snapshot for map bootstrap |
+| `GET /api/vessels/:id` | Vessel profile, latest position, sanctions state |
+| `GET /api/vessels/:id/track` | Historical track query with optional simplification |
+| `WS /ws/positions` | Realtime position, static, and enrichment updates |
+| `GET /readyz` | DB/Redis readiness plus feed degradation signal |
 
-### Public HTTP
+Admin routes support DLQ inspection/replay and sanctions import operations, guarded by `x-admin-token` and blocked publicly by the production Nginx config.
 
-| Method | Path                                         | Purpose                                              |
-| ------ | -------------------------------------------- | ---------------------------------------------------- |
-| `GET`  | `/healthz`                                   | Process liveness                                     |
-| `GET`  | `/readyz`                                    | DB/Redis readiness plus provider degradation payload |
-| `GET`  | `/metrics`                                   | Prometheus metrics                                   |
-| `GET`  | `/api/vessels?limit=&staleMinutes=`          | Latest vessel snapshot                               |
-| `GET`  | `/api/vessels/:id`                           | Vessel profile, current position, sanctions state    |
-| `GET`  | `/api/vessels/:id/track?from=&to=&simplify=` | Historical track, capped to 7 days                   |
-| `GET`  | `/api/sanctions/sources`                     | Sanctions source metadata and last import summary    |
+![Vessel detail view](docs/assets/vessel-detail.png)
 
-### Admin HTTP
-
-Admin routes are guarded by `x-admin-token` when `ADMIN_TOKEN` is configured.
-In non-development environments, an unset token disables admin access.
-
-| Method | Path                                   | Purpose                                      |
-| ------ | -------------------------------------- | -------------------------------------------- |
-| `GET`  | `/admin/deadletter?stream=&limit=`     | Inspect DLQ entries                          |
-| `POST` | `/admin/deadletter/:id/replay`         | Replay a DLQ event to its original stream    |
-| `GET`  | `/admin/sanctions/imports`             | Inspect sanctions import runs                |
-| `POST` | `/admin/sanctions/imports/:source/run` | Trigger a sanctions import, currently `ofac` |
-| `GET`  | `/admin/streams`                       | Inspect known Redis Streams                  |
-
-### WebSocket
-
-`WS /ws/positions`
-
-Client message:
-
-```json
-{ "type": "subscribe" }
-```
-
-Server messages:
-
-- `{ "type": "position", "data": ... }`
-- `{ "type": "static", "data": ... }`
-- `{ "type": "vessel.enriched", "data": ... }`
-- `{ "type": "error", "error": { "code": "...", "message": "..." } }`
-
-## Database Model
-
-| Table                      | Ownership          | Purpose                                    |
-| -------------------------- | ------------------ | ------------------------------------------ |
-| `vessels`                  | storage/enrichment | Vessel identity, profile, sanctions status |
-| `vessel_positions_latest`  | storage            | One current geospatial row per vessel      |
-| `vessel_positions_history` | storage            | Append-only partitioned position history   |
-| `sanctioned_entities`      | sanctions ETL      | Local sanctions vessel candidates          |
-| `sanctions_import_runs`    | sanctions ETL      | Import audit log                           |
-
-PostGIS uses `geometry(Point, 4326)` because the primary workload is web-map and
-bbox querying. Distance-heavy queries can cast to `geography` where needed.
-
-## Reliability and Production Signals
-
-- Redis Streams isolate producers from storage, realtime, and post-persistence enrichment consumers.
-- Consumer groups acknowledge only after handler success.
-- Handler failures are retried, reclaimed with `XAUTOCLAIM`, and eventually sent to `ais.deadletter`.
-- DLQ entries retain original stream metadata and can be manually replayed.
-- Storage writes use database transactions and idempotent history insertion.
-- Storage publishes `vessel.persisted.v1` as a best-effort post-commit handoff;
-  the project intentionally does not use a transactional outbox yet.
-- Stale AIS telemetry outside the retained operational window is dropped at the storage boundary before DB writes.
-- Latest-position upserts keep an `occurred_at` guard as a secondary out-of-order protection.
-- Enrichment jobs use deterministic BullMQ job IDs and freshness-guarded updates.
-- Vessel enrichment reconciliation periodically recovers unchecked or stale
-  persisted vessels when the immediate post-persistence event or enqueue path is missed.
-- Provider health tracks connection state, last message age, and reconnect count.
-- Slow realtime clients are contained by bounded queues and heartbeat timeouts.
-- Metrics expose ingestion drops, stream lag/pending, handler latency, DB writes,
-  enrichment outcomes, WebSocket activity, and HTTP latency.
-
-## Setup
-
-Prerequisites:
-
-- Node.js 22+
-- pnpm 10+
-- Docker
-- AISStream API key for live ingestion
+## Running Locally
 
 ```bash
 pnpm install
 cp .env.example .env
-docker compose up -d postgres redis
-pnpm migrate
-pnpm start:dev
-```
-
-Set `AISSTREAM_API_KEY` in `.env` when running with `AIS_PROVIDERS=aisstream`.
-Without a key, remove `aisstream` from `AIS_PROVIDERS` for API-only local work.
-
-## Running the Full Stack
-
-```bash
 docker compose --profile full up --build
 ```
 
-Services:
+Primary local services:
 
 - API: `http://localhost:3000`
+- WebSocket: `ws://localhost:3000/ws/positions`
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3001`
 
-The full-stack Compose profile runs a one-shot migration job before the app
-starts, including daily history partition maintenance. Grafana is provisioned
-with the AIS Tracking System dashboard.
-
-Fresh-stack smoke checklist:
+Common checks:
 
 ```bash
-docker compose --profile full down -v
-docker compose --profile full up --build
-docker compose --profile full logs migrate
-docker compose --profile full logs app | grep -E 'relation .* does not exist|handler error'
-docker compose --profile full up --build -d
-```
-
-Expected result: `migrate` exits successfully, `app` becomes healthy, the app
-logs do not contain missing-table errors, and the repeat `up` is idempotent.
-
-## Frontend
-
-Run the backend on port 3000, then start the Vite app:
-
-```bash
-pnpm --dir web install
-pnpm web:dev
-```
-
-The frontend uses a REST snapshot for initial state and WebSocket updates for
-live movement, static profile changes, and sanctions enrichment changes.
-
-## Environment Configuration
-
-Important variables:
-
-| Variable                                | Purpose                                                      |
-| --------------------------------------- | ------------------------------------------------------------ |
-| `PROCESS_ROLE`                          | `all`, `api`, `ingestion`, or `worker`                       |
-| `DATABASE_URL`                          | PostgreSQL/PostGIS connection string                         |
-| `REDIS_URL`                             | Redis connection string                                      |
-| `ADMIN_TOKEN`                           | Token required for admin endpoints outside local development |
-| `AIS_PROVIDERS`                         | Comma-separated provider IDs, currently `aisstream`          |
-| `AISSTREAM_API_KEY`                     | AISStream API key                                            |
-| `STREAM_RETRY_LIMIT`                    | Stream handler failures before DLQ                           |
-| `STREAM_MAXLEN`                         | Approximate Redis Stream retention length                    |
-| `HISTORY_RETENTION_DAYS`                | Track history retention window, default 7                    |
-| `HISTORY_PRECREATE_DAYS`                | Future daily partitions to pre-create, default 7             |
-| `HISTORY_PARTITION_MAINTENANCE_ENABLED` | Enable startup and scheduled partition maintenance           |
-| `WS_SEND_QUEUE_MAX`                     | Per-client realtime queue cap                                |
-| `ENRICHMENT_STALENESS_SECONDS`          | Vessel sanctions recheck interval                            |
-| `OFAC_SDN_URL`                          | OFAC SDN XML source                                          |
-| `OFAC_SDN_FIXTURE_PATH`                 | Local OFAC fixture override for tests/demos                  |
-| `SANCTIONS_IMPORT_CRON`                 | Recurring sanctions import schedule                          |
-
-See `.env.example` for defaults.
-
-## Testing
-
-Backend:
-
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
+pnpm typecheck && pnpm lint && pnpm test
 pnpm test:integration
-pnpm build
-```
-
-Frontend:
-
-```bash
-pnpm --dir web typecheck
-pnpm --dir web lint
 pnpm --dir web test
-pnpm web:build
 ```
 
-The repository includes broad unit coverage for provider parsing, normalization,
-pipeline quality controls, stream failure handling, realtime queues, API
-controllers, enrichment matching, sanctions import parsing, and frontend merge
-logic. `pnpm test` runs only the fast `src/**/*.spec.ts` suites and excludes
-`*.integration.spec.ts`.
+Set `AISSTREAM_API_KEY` in `.env` for live ingestion.
 
-Backend integration tests live under `test/integration` and are run through
-Testcontainers:
+## Deployment Model
 
-```bash
-pnpm test:integration
-```
+- Single backend image, selected at runtime with `PROCESS_ROLE=api|ingestion|worker`.
+- Docker Compose production topology with Nginx, Postgres/PostGIS, Redis, Prometheus, and Grafana.
+- One-shot migrator image for Drizzle migrations and history partition maintenance.
+- GitHub Actions CI for backend/frontend quality checks, Docker image builds, Artifact Registry pushes, and approval-gated deployment.
+- Operational scripts for smoke checks, rollback, Postgres backups, Redis backups, and restore drills.
 
-Expected behavior:
-
-1. Jest global setup starts an isolated `postgis/postgis:16-3.4` container.
-2. The container creates a disposable `ais_test` database automatically.
-3. Before each integration spec file, Jest drops/recreates the disposable
-   schemas and applies the normal Drizzle migrations from `./drizzle`.
-4. All `test/integration/**/*.integration.spec.ts` suites run serially.
-5. Jest global teardown stops the container and removes its volumes.
-
-The history partition DDL integration test still validates generated daily
-partition SQL against real Postgres/PostGIS, including parent attachment,
-insert routing, cross-partition reads, missing-partition failures, and drop SQL.
-Its destructive checks are guarded so they only run against the Testcontainers
-`ais_test` database. Because every spec file starts from a clean migrated
-database, destructive DDL in one suite cannot pollute later suites or make tests
-depend on file execution order.
-
-Docker must be installed and running locally or in CI. If integration tests fail
-before Jest starts the suites with a Docker connection error, start Docker and
-rerun the command. In CI, use a runner that supports Docker containers and does
-not block the Testcontainers Ryuk cleanup sidecar.
-
-## Project Structure
+## Project Map
 
 ```text
 src/
-  admin/        Admin operations: DLQ replay, stream inspection, sanctions imports
-  api/          Public REST controllers
-  contracts/    Canonical event schemas and shared contracts
-  enrichment/   Sanctions ETL and per-vessel enrichment workers
-  ingestion/    AIS provider adapters, filters, normalizers, registry
-  pipeline/     Deduplication, sampling, event publication
-  realtime/     WebSocket gateway, fanout consumer, send queues
-  shared/       Config, DB, Redis, event bus, logging, metrics, health
-  storage/      Vessel repository, storage consumer, Drizzle schema
-test/
-  integration/  Testcontainers-backed and slower cross-component integration specs
-web/src/
-  api/          REST client
-  components/   Map UI components
-  lib/          WebSocket client and display helpers
-  map/          MapLibre source/layer hooks
-  store/        Vessel merge reducer and Zustand store
-drizzle/        Database migrations
-docker/         Prometheus and Grafana provisioning
-docs/           Product, architecture, and review documentation
-scripts/        Operational helpers
+  ingestion/   AIS provider adapters, filters, normalizers
+  pipeline/    deduplication, sampling, geo validation, event publishing
+  storage/     PostGIS schema, repositories, stream consumers
+  realtime/    WebSocket gateway, fanout, bounded send queues
+  enrichment/  sanctions ETL and vessel enrichment workers
+  shared/      config, Redis, event bus, DB, metrics, logs, health
+web/           React + MapLibre realtime client
+docs/          architecture, deployment, operations, restore notes
 ```
 
-## Engineering Highlights
+## Future Improvements
 
-- The module graph makes ownership explicit without forcing premature microservices.
-- Internal contracts are versioned and validated at module boundaries.
-- Redis Streams are used as a real durability and replay boundary, not just pub/sub.
-- Storage separates identity, latest state, and historical tracks by access pattern.
-- The realtime path treats backpressure as a first-class failure mode.
-- Enrichment is asynchronous and idempotent, with local data ownership instead of runtime third-party lookups.
-- Observability is implemented across the event pipeline, not bolted onto one endpoint.
+- Expand AIS coverage zones, add additional providers, and define explicit multi-provider failover behavior.
+- Replace best-effort post-commit enrichment handoff with a transactional outbox if lossless derived-event delivery becomes required.
+- Add OpenAPI generation and typed API client publishing.
+- Add public API auth, rate limiting, and tenant-aware access controls.
+- Move from single-VM Docker Compose to Kubernetes or managed container orchestration when horizontal scaling justifies the operational cost.
+- Extend sanctions sources beyond OFAC and add reviewer workflows for name-only candidate matches.
 
-## Current Limitations and Roadmap
+## Further Reading
 
-- Add a production deployment runbook for daily history partition maintenance
-  and retention monitoring.
-- Replace full-table sanctions candidate loading with indexed lookup by IMO/MMSI/name.
-- Add database-backed integration tests for transactional storage, track queries,
-  sanctions imports, DLQ replay, and realtime slow-client behavior.
-- Add OpenAPI documentation or generated typed API clients.
-- Add authentication/rate limiting for public APIs if exposed beyond local/demo environments.
-- Split API, ingestion, worker, and realtime roles into separately scaled deployments.
-- Add OpenSanctions as a second source and document attribution in API/UI output.
-
-For the deeper architectural review, see
-[`docs/architecture-review.md`](docs/architecture-review.md).
+- [`docs/architecture.md`](docs/architecture.md)
+- [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
+- [`docs/architecture-review.md`](docs/architecture-review.md)
+- [`docs/operations-runbook.md`](docs/operations-runbook.md)
+- [`docs/deployment-ci-cd-plan.md`](docs/deployment-ci-cd-plan.md)
+- [`docs/restore-drill.md`](docs/restore-drill.md)
