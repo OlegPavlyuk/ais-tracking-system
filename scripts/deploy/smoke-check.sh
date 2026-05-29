@@ -2,17 +2,33 @@
 set -euo pipefail
 
 BASE_URL="${SMOKE_BASE_URL:-http://localhost}"
-SMOKE_MAX_ATTEMPTS="${SMOKE_MAX_ATTEMPTS:-10}"
+if [[ -n "${SMOKE_HTTP_BASE_URL:-}" ]]; then
+  HTTP_BASE_URL="$SMOKE_HTTP_BASE_URL"
+elif [[ "$BASE_URL" == https://* ]]; then
+  HTTP_BASE_URL="http://${BASE_URL#https://}"
+else
+  HTTP_BASE_URL="$BASE_URL"
+fi
+if [[ -n "${SMOKE_HTTPS_BASE_URL:-}" ]]; then
+  HTTPS_BASE_URL="$SMOKE_HTTPS_BASE_URL"
+elif [[ "$BASE_URL" == http://* ]]; then
+  HTTPS_BASE_URL="https://${BASE_URL#http://}"
+else
+  HTTPS_BASE_URL="$BASE_URL"
+fi
+SMOKE_HTTPS_INSECURE="${SMOKE_HTTPS_INSECURE:-true}"
+SMOKE_MAX_ATTEMPTS="${SMOKE_MAX_ATTEMPTS:-20}"
 SMOKE_RETRY_SLEEP_SECONDS="${SMOKE_RETRY_SLEEP_SECONDS:-3}"
 SMOKE_CURL_MAX_TIME_SECONDS="${SMOKE_CURL_MAX_TIME_SECONDS:-2}"
 
 retry_curl_ok() {
   local url="$1"
+  shift
   local attempt
   local output
 
   for attempt in $(seq 1 "$SMOKE_MAX_ATTEMPTS"); do
-    if output="$(curl -fsS --max-time "$SMOKE_CURL_MAX_TIME_SECONDS" "$url" 2>&1 > /dev/null)"; then
+    if output="$(curl -fsS "$@" --max-time "$SMOKE_CURL_MAX_TIME_SECONDS" "$url" 2>&1 > /dev/null)"; then
       return 0
     fi
 
@@ -29,12 +45,13 @@ retry_curl_ok() {
 retry_curl_status() {
   local url="$1"
   local expected_status="$2"
+  shift 2
   local attempt
   local output
   local status
 
   for attempt in $(seq 1 "$SMOKE_MAX_ATTEMPTS"); do
-    output="$(curl -sS --max-time "$SMOKE_CURL_MAX_TIME_SECONDS" -o /dev/null -w '%{http_code}' "$url" 2>&1)" && status="$output" || status=""
+    output="$(curl -sS "$@" --max-time "$SMOKE_CURL_MAX_TIME_SECONDS" -o /dev/null -w '%{http_code}' "$url" 2>&1)" && status="$output" || status=""
 
     if [[ "$status" == "$expected_status" ]]; then
       return 0
@@ -49,12 +66,6 @@ retry_curl_status() {
     fi
   done
 }
-
-retry_curl_ok "$BASE_URL/healthz"
-retry_curl_ok "$BASE_URL/readyz"
-retry_curl_ok "$BASE_URL/api/vessels?limit=1"
-retry_curl_status "$BASE_URL/metrics" "404"
-retry_curl_status "$BASE_URL/admin" "404"
 
 docker_cmd() {
   if [[ "${AIS_DEPLOY_USE_SUDO_DOCKER:-false}" == "true" ]]; then
@@ -139,4 +150,21 @@ for service in "${required_services[@]}"; do
   wait_for_service_health "$service"
 done
 
-echo "Smoke checks passed for $BASE_URL"
+https_curl_args=()
+if [[ "$SMOKE_HTTPS_INSECURE" == "true" ]]; then
+  https_curl_args+=(-k)
+fi
+
+retry_curl_ok "$HTTP_BASE_URL/nginx-health"
+retry_curl_status "$HTTP_BASE_URL/healthz" "301"
+retry_curl_status "$HTTP_BASE_URL/readyz" "301"
+retry_curl_status "$HTTP_BASE_URL/api/vessels?limit=1" "301"
+retry_curl_status "$HTTP_BASE_URL/metrics" "301"
+retry_curl_status "$HTTP_BASE_URL/admin" "301"
+retry_curl_ok "$HTTPS_BASE_URL/healthz" "${https_curl_args[@]}"
+retry_curl_ok "$HTTPS_BASE_URL/readyz" "${https_curl_args[@]}"
+retry_curl_ok "$HTTPS_BASE_URL/api/vessels?limit=1" "${https_curl_args[@]}"
+retry_curl_status "$HTTPS_BASE_URL/metrics" "404" "${https_curl_args[@]}"
+retry_curl_status "$HTTPS_BASE_URL/admin" "404" "${https_curl_args[@]}"
+
+echo "Smoke checks passed for HTTP $HTTP_BASE_URL and HTTPS $HTTPS_BASE_URL"

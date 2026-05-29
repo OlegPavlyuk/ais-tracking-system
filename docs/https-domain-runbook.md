@@ -150,10 +150,10 @@ sudo docker compose \
 ```
 
 Before the real certificate exists, this check should reach Nginx but will not
-yet verify trust:
+yet exercise the HTTPS certificate:
 
 ```bash
-curl -kI https://aiswatch.live/nginx-health
+curl -fsS http://localhost/nginx-health
 ```
 
 ## 3. Issue The Initial Let's Encrypt Certificate

@@ -398,10 +398,17 @@ Migration rules:
 Minimum smoke checks after deploy:
 
 ```bash
-curl -fsS http://localhost/healthz
-curl -fsS http://localhost/readyz
-curl -fsS http://localhost/api/vessels?limit=1
+curl -fsS http://localhost/nginx-health
+curl -I http://localhost/healthz
+curl -kfsS https://localhost/healthz
+curl -kfsS https://localhost/readyz
+curl -kfsS https://localhost/api/vessels?limit=1
 ```
+
+After HTTPS is enabled, normal HTTP app routes should redirect to HTTPS. The
+local deployment smoke script uses `/nginx-health` for plain-HTTP Nginx
+readiness and uses `-k` for local HTTPS checks so the bootstrap self-signed
+certificate does not block deployment before Let's Encrypt issuance.
 
 Additional checks:
 - inspect `docker compose ps`;
@@ -733,7 +740,8 @@ Commands to run:
 docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml run --rm migrate
 docker compose -f docker-compose.prod.yml up -d --remove-orphans
-curl -fsS http://localhost/readyz
+curl -fsS http://localhost/nginx-health
+curl -kfsS https://localhost/readyz
 ```
 
 Risks / things to verify:
