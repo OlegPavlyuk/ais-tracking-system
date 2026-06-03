@@ -55,6 +55,10 @@ export function App() {
       });
   }, []);
 
+  const handleMapError = useCallback((err: Error) => {
+    useVesselsStore.getState().setError({ code: 'MAP_INIT', message: err.message });
+  }, []);
+
   useEffect(() => {
     const handlers: WsClientHandlers = {
       onMessage: (msg) => {
@@ -101,7 +105,7 @@ export function App() {
 
   return (
     <div className="relative h-full w-full">
-      <MapView onReady={setMap} />
+      <MapView onReady={setMap} onError={handleMapError} />
       <StatusPill />
       <ErrorNotice />
       <MapLegend />

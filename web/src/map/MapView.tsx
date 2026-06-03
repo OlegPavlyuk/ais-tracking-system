@@ -20,45 +20,84 @@ const VESSEL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${VESSEL_ICON
 
 interface MapViewProps {
   onReady: (map: MlMap) => void;
+  onError?: (error: Error) => void;
 }
 
-export function MapView({ onReady }: MapViewProps) {
+export function MapView({ onReady, onError }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
   onReadyRef.current = onReady;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (!containerRef.current) return;
     const styleUrl = import.meta.env.VITE_MAP_STYLE_URL ?? DEFAULT_STYLE_URL;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: styleUrl,
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
-      attributionControl: { compact: true },
-    });
+    let reportedError = false;
+    let initialized = false;
+    const reportError = (error: Error) => {
+      if (reportedError || initialized) return;
+      reportedError = true;
+      onErrorRef.current?.(error);
+    };
+
+    let map: MlMap;
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: styleUrl,
+        center: DEFAULT_CENTER,
+        zoom: DEFAULT_ZOOM,
+        attributionControl: { compact: true },
+      });
+    } catch (err) {
+      reportError(toMapInitError(err));
+      return;
+    }
     map.addControl(new ZoomLevelControl(), 'bottom-right');
 
     let cancelled = false;
+    const handleMapError = (event: { error?: unknown }) => {
+      reportError(toMapInitError(event.error));
+    };
+    map.on('error', handleMapError);
     map.on('load', () => {
-      void registerVesselIcon(map).then(() => {
-        if (cancelled) return;
-        addVesselsSource(map);
-        addVesselsSanctionsHaloLayer(map);
-        addVesselsCircleLayer(map);
-        addVesselsArrowLayer(map);
-        onReadyRef.current(map);
-      });
+      void registerVesselIcon(map)
+        .then(() => {
+          if (cancelled) return;
+          addVesselsSource(map);
+          addVesselsSanctionsHaloLayer(map);
+          addVesselsCircleLayer(map);
+          addVesselsArrowLayer(map);
+          initialized = true;
+          map.off('error', handleMapError);
+          onReadyRef.current(map);
+        })
+        .catch((err: unknown) => {
+          reportError(toMapInitError(err, 'Map marker icon failed to initialize'));
+        });
     });
 
     return () => {
       cancelled = true;
+      map.off('error', handleMapError);
       map.remove();
     };
   }, []);
 
   return <div ref={containerRef} className="absolute inset-0" />;
+}
+
+function toMapInitError(err: unknown, fallback = 'Map failed to initialize'): Error {
+  const prefix = `${fallback}: `;
+  if (err instanceof Error && err.message.length > 0) {
+    return new Error(err.message.startsWith(prefix) ? err.message : `${prefix}${err.message}`);
+  }
+  if (typeof err === 'string' && err.length > 0) {
+    return new Error(err.startsWith(prefix) ? err : `${prefix}${err}`);
+  }
+  return new Error(fallback);
 }
 
 class ZoomLevelControl implements IControl {
@@ -185,12 +224,7 @@ function addVesselsSanctionsHaloLayer(map: MlMap): void {
           '#DC2626',
           '#F59E0B',
         ],
-        'circle-opacity': [
-          'case',
-          ['==', ['get', 'sanctionsStatus'], 'sanctioned'],
-          0.16,
-          0.1,
-        ],
+        'circle-opacity': ['case', ['==', ['get', 'sanctionsStatus'], 'sanctioned'], 0.16, 0.1],
         'circle-stroke-color': [
           'case',
           ['==', ['get', 'sanctionsStatus'], 'sanctioned'],

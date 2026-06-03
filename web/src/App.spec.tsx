@@ -1,18 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { App } from './App';
 import { useVesselsStore } from './store/vessels';
 
 const mocks = vi.hoisted(() => ({
   fetchVessels: vi.fn(),
   mapReady: null as ((map: unknown) => void) | null,
+  mapError: null as ((error: Error) => void) | null,
   wsStart: vi.fn(),
   wsStop: vi.fn(),
 }));
 
 vi.mock('./map/MapView', () => ({
-  MapView: ({ onReady }: { onReady: (map: unknown) => void }) => {
+  MapView: ({
+    onReady,
+    onError,
+  }: {
+    onReady: (map: unknown) => void;
+    onError?: (error: Error) => void;
+  }) => {
     mocks.mapReady = onReady;
+    mocks.mapError = onError ?? null;
     return null;
   },
 }));
@@ -42,13 +50,17 @@ describe('App bootstrap', () => {
   beforeEach(() => {
     mocks.fetchVessels.mockReset();
     mocks.mapReady = null;
+    mocks.mapError = null;
     mocks.wsStart.mockReset();
     mocks.wsStop.mockReset();
     useVesselsStore.setState({ vessels: new Map(), wsStatus: 'idle', error: null });
   });
 
   afterEach(() => {
-    useVesselsStore.setState({ vessels: new Map(), wsStatus: 'idle', error: null });
+    cleanup();
+    act(() => {
+      useVesselsStore.setState({ vessels: new Map(), wsStatus: 'idle', error: null });
+    });
   });
 
   it('starts data bootstrap before the map becomes ready', async () => {
@@ -118,5 +130,21 @@ describe('App bootstrap', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('boom');
     });
+  });
+
+  it('shows a map initialization error alert', async () => {
+    mocks.fetchVessels.mockResolvedValue({ vessels: [] });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mocks.fetchVessels).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      mocks.mapError?.(new Error('Map failed to initialize: bad style'));
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('bad style');
   });
 });

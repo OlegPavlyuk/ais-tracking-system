@@ -90,9 +90,7 @@ describe('applyPosition', () => {
   });
 
   it('preserves existing name when event omits shipName', () => {
-    const seeded = new Map<string, Vessel>([
-      [MMSI_A, { ...emptyVessel(MMSI_A), name: 'KEPT' }],
-    ]);
+    const seeded = new Map<string, Vessel>([[MMSI_A, { ...emptyVessel(MMSI_A), name: 'KEPT' }]]);
     const next = applyPosition(seeded, positionEvent({ shipName: null }));
     expect((next.get(MMSI_A) as Vessel).name).toBe('KEPT');
   });
@@ -110,7 +108,10 @@ describe('applyStatic', () => {
 
   it('does not overwrite a non-null profile field with null', () => {
     const seeded = new Map<string, Vessel>([
-      [MMSI_A, { ...emptyVessel(MMSI_A), name: 'KEPT', staticOccurredAt: '2024-01-01T00:00:00.000Z' }],
+      [
+        MMSI_A,
+        { ...emptyVessel(MMSI_A), name: 'KEPT', staticOccurredAt: '2024-01-01T00:00:00.000Z' },
+      ],
     ]);
     const next = applyStatic(seeded, staticEvent({ name: null }));
     expect((next.get(MMSI_A) as Vessel).name).toBe('KEPT');
@@ -129,6 +130,21 @@ describe('applyStatic', () => {
     ]);
     const next = applyStatic(seeded, staticEvent({ name: 'OLDER' }));
     expect((next.get(MMSI_A) as Vessel).name).toBe('NEWER');
+  });
+
+  it('returns the existing reference for stale static events', () => {
+    const seeded = new Map<string, Vessel>([
+      [
+        MMSI_A,
+        {
+          ...emptyVessel(MMSI_A),
+          name: 'NEWER',
+          staticOccurredAt: '2024-01-01T01:00:00.000Z',
+        },
+      ],
+    ]);
+    const next = applyStatic(seeded, staticEvent({ name: 'OLDER' }));
+    expect(next).toBe(seeded);
   });
 });
 
@@ -374,10 +390,7 @@ describe('pruneStaleVessels', () => {
     const { pruneStaleVessels, SNAPSHOT_RETENTION_MS } = await import('./mergeReducer');
     const now = Date.parse('2024-01-02T00:00:00.000Z');
     const seeded = new Map<string, Vessel>([
-      [
-        MMSI_A,
-        { ...emptyVessel(MMSI_A), lastSeenAt: '2024-01-01T12:00:00.000Z' },
-      ],
+      [MMSI_A, { ...emptyVessel(MMSI_A), lastSeenAt: '2024-01-01T12:00:00.000Z' }],
     ]);
     const next = pruneStaleVessels(seeded, now, SNAPSHOT_RETENTION_MS);
     expect(next.has(MMSI_A)).toBe(true);
@@ -387,10 +400,7 @@ describe('pruneStaleVessels', () => {
     const { pruneStaleVessels, SNAPSHOT_RETENTION_MS } = await import('./mergeReducer');
     const now = Date.parse('2024-01-03T00:00:00.000Z');
     const seeded = new Map<string, Vessel>([
-      [
-        MMSI_A,
-        { ...emptyVessel(MMSI_A), lastSeenAt: '2024-01-01T00:00:00.000Z' },
-      ],
+      [MMSI_A, { ...emptyVessel(MMSI_A), lastSeenAt: '2024-01-01T00:00:00.000Z' }],
     ]);
     const next = pruneStaleVessels(seeded, now, SNAPSHOT_RETENTION_MS);
     expect(next.has(MMSI_A)).toBe(false);
