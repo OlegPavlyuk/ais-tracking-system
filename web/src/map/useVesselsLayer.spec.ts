@@ -5,6 +5,7 @@ import type { GeoJSONSource, Map as MlMap } from 'maplibre-gl';
 import { buildFeatureCollection } from './buildFeatureCollection';
 import { useVesselsLayer } from './useVesselsLayer';
 import { useVesselsStore } from '@/store/vessels';
+import { frontendMetrics } from '@/lib/frontendMetrics';
 import type { Vessel } from '@/store/types';
 
 function makeVessel(overrides: Partial<Vessel> = {}): Vessel {
@@ -86,11 +87,13 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal(
     'requestAnimationFrame',
-    vi.fn((cb: FrameRequestCallback) =>
-      window.setTimeout(() => cb(performance.now()), 0),
-    ),
+    vi.fn((cb: FrameRequestCallback) => window.setTimeout(() => cb(performance.now()), 0)),
   );
-  vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => window.clearTimeout(id)));
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((id: number) => window.clearTimeout(id)),
+  );
+  frontendMetrics().reset();
   useVesselsStore.setState({
     vessels: new Map([['a', makeVessel()]]),
     wsStatus: 'idle',
@@ -103,6 +106,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   useVesselsStore.setState({ vessels: new Map(), wsStatus: 'idle', error: null });
+  frontendMetrics().reset();
 });
 
 describe('useVesselsLayer', () => {
@@ -116,6 +120,20 @@ describe('useVesselsLayer', () => {
     advanceTimers(1);
     flushPendingTimers();
     expect(map.source.setData).toHaveBeenCalledTimes(1);
+  });
+
+  it('records source update metrics when flushing vessel data', () => {
+    const map = new FakeMap();
+    render(React.createElement(HookHarness, { map: map as unknown as MlMap }));
+
+    advanceTimers(500);
+    flushPendingTimers();
+
+    expect(frontendMetrics().vesselSourceUpdates.flushCount).toBe(1);
+    expect(frontendMetrics().vesselSourceUpdates.lastVesselCount).toBe(1);
+    expect(frontendMetrics().vesselSourceUpdates.lastFeatureCount).toBe(1);
+    expect(frontendMetrics().vesselSourceUpdates.lastBuildDurationMs).toBeGreaterThanOrEqual(0);
+    expect(frontendMetrics().vesselSourceUpdates.lastSetDataDurationMs).toBeGreaterThanOrEqual(0);
   });
 
   it('defers source updates while the map is moving and flushes once after moveend', () => {
@@ -182,33 +200,25 @@ describe('buildFeatureCollection', () => {
   });
 
   it('prefers valid COG over trueHeading for rotation', () => {
-    const vessels = new Map([
-      ['a', makeVessel({ cog: 90, trueHeading: 180 })],
-    ]);
+    const vessels = new Map([['a', makeVessel({ cog: 90, trueHeading: 180 })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(90);
   });
 
   it('falls back to trueHeading when cog is null', () => {
-    const vessels = new Map([
-      ['a', makeVessel({ cog: null, trueHeading: 180 })],
-    ]);
+    const vessels = new Map([['a', makeVessel({ cog: null, trueHeading: 180 })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(180);
   });
 
   it('treats trueHeading 511 as unavailable and falls back to cog', () => {
-    const vessels = new Map([
-      ['a', makeVessel({ cog: 90, trueHeading: 511 })],
-    ]);
+    const vessels = new Map([['a', makeVessel({ cog: 90, trueHeading: 511 })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(90);
   });
 
   it('treats out-of-range COG as unavailable and falls back to trueHeading', () => {
-    const vessels = new Map([
-      ['a', makeVessel({ cog: 360, trueHeading: 270 })],
-    ]);
+    const vessels = new Map([['a', makeVessel({ cog: 360, trueHeading: 270 })]]);
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.rotation).toBe(270);
   });
@@ -260,5 +270,4 @@ describe('buildFeatureCollection', () => {
     const fc = buildFeatureCollection(vessels);
     expect(fc.features[0]!.properties.markerShape).toBe('circle');
   });
-
 });

@@ -144,11 +144,15 @@ export function applyStatic(
   prev: ReadonlyMap<string, Vessel>,
   ev: StaticEvent,
 ): Map<string, Vessel> {
-  const base = prev.get(ev.mmsi) ?? emptyVessel(ev.mmsi);
-  const next = new Map(prev);
+  const existing = prev.get(ev.mmsi);
+  const base = existing ?? emptyVessel(ev.mmsi);
   // Static events upsert profile fields by mmsi; create stub when unknown.
   // Timestamp guard applies to profile-occurred-at, not position-occurred-at.
   const accept = isNewer(ev.occurredAt, base.staticOccurredAt);
+  if (existing && !accept) {
+    return prev as Map<string, Vessel>;
+  }
+  const next = new Map(prev);
   next.set(ev.mmsi, {
     ...base,
     imo: accept ? preferNonNull(ev.imo, base.imo) : base.imo,

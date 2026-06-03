@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { Map as MlMap, GeoJSONSource } from 'maplibre-gl';
 import { useVesselsStore } from '@/store/vessels';
+import { recordVesselSourceUpdate } from '@/lib/frontendMetrics';
 import { buildFeatureCollection } from './buildFeatureCollection';
 import { MapViewIds } from './mapViewIds';
 
@@ -46,11 +47,19 @@ export function useVesselsLayer(map: MlMap | null): void {
         }
         const source = map.getSource(MapViewIds.vesselsSourceId) as GeoJSONSource | undefined;
         if (source) {
-          source.setData(
-            buildFeatureCollection(useVesselsStore.getState().vessels) as unknown as Parameters<
-              GeoJSONSource['setData']
-            >[0],
-          );
+          const vessels = useVesselsStore.getState().vessels;
+          const buildStart = performance.now();
+          const featureCollection = buildFeatureCollection(vessels);
+          const buildDurationMs = performance.now() - buildStart;
+          const setDataStart = performance.now();
+          source.setData(featureCollection as unknown as Parameters<GeoJSONSource['setData']>[0]);
+          const setDataDurationMs = performance.now() - setDataStart;
+          recordVesselSourceUpdate({
+            buildDurationMs,
+            setDataDurationMs,
+            vesselCount: vessels.size,
+            featureCount: featureCollection.features.length,
+          });
           lastFlush = performance.now();
         }
         pending = false;

@@ -11,6 +11,7 @@ import { MapLegend } from './components/MapLegend';
 import { useVesselsStore } from './store/vessels';
 import { ApiError, fetchVessels } from './api/client';
 import { WsClient, buildWsUrl, type WsClientHandlers } from './lib/wsClient';
+import { recordRealtimeMessage } from './lib/frontendMetrics';
 
 const WS_PATH = '/ws/positions';
 const STALE_PRUNE_INTERVAL_MS = 60_000;
@@ -55,24 +56,32 @@ export function App() {
       });
   }, []);
 
+  const handleMapError = useCallback((err: Error) => {
+    useVesselsStore.getState().setError({ code: 'MAP_INIT', message: err.message });
+  }, []);
+
   useEffect(() => {
     const handlers: WsClientHandlers = {
       onMessage: (msg) => {
         const store = useVesselsStore.getState();
         switch (msg.type) {
           case 'position':
+            recordRealtimeMessage('position');
             store.setError(null);
             store.applyPosition(msg.data);
             break;
           case 'static':
+            recordRealtimeMessage('static');
             store.setError(null);
             store.applyStatic(msg.data);
             break;
           case 'vessel.enriched':
+            recordRealtimeMessage('vessel.enriched');
             store.setError(null);
             store.applyEnriched(msg.data);
             break;
           case 'error':
+            recordRealtimeMessage('error');
             store.setError({
               code: msg.error.code,
               message: msg.error.message,
@@ -101,7 +110,7 @@ export function App() {
 
   return (
     <div className="relative h-full w-full">
-      <MapView onReady={setMap} />
+      <MapView onReady={setMap} onError={handleMapError} />
       <StatusPill />
       <ErrorNotice />
       <MapLegend />
