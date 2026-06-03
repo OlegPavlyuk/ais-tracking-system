@@ -11,6 +11,7 @@ import { MapLegend } from './components/MapLegend';
 import { useVesselsStore } from './store/vessels';
 import { ApiError, fetchVessels } from './api/client';
 import { WsClient, buildWsUrl, type WsClientHandlers } from './lib/wsClient';
+import { recordRealtimeMessage } from './lib/frontendMetrics';
 
 const WS_PATH = '/ws/positions';
 const STALE_PRUNE_INTERVAL_MS = 60_000;
@@ -65,18 +66,22 @@ export function App() {
         const store = useVesselsStore.getState();
         switch (msg.type) {
           case 'position':
+            recordRealtimeMessage('position');
             store.setError(null);
             store.applyPosition(msg.data);
             break;
           case 'static':
+            recordRealtimeMessage('static');
             store.setError(null);
             store.applyStatic(msg.data);
             break;
           case 'vessel.enriched':
+            recordRealtimeMessage('vessel.enriched');
             store.setError(null);
             store.applyEnriched(msg.data);
             break;
           case 'error':
+            recordRealtimeMessage('error');
             store.setError({
               code: msg.error.code,
               message: msg.error.message,
