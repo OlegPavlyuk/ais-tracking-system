@@ -1,7 +1,7 @@
 # HTTPS And Domain Runbook
 
-This runbook upgrades the existing single-VM Docker Compose deployment from
-HTTP on the reserved GCP IP to HTTPS on:
+This runbook operates HTTPS for the single-VM Docker Compose deployment. The
+examples use the current project domain:
 
 ```text
 https://aiswatch.live
@@ -27,12 +27,11 @@ Tradeoffs considered:
 - Cloudflare proxying can be added later for WAF/DDoS features, but direct DNS
   keeps the first HTTPS rollout easier to reason about.
 
-The Nginx image includes a short bootstrap fallback: if the Let's Encrypt files
-are not present yet, Nginx starts with a temporary self-signed certificate. That
-keeps the first HTTPS deployment from failing before Certbot has issued the real
-certificate. After issuance, recreate the Nginx container so it switches to the
-Let's Encrypt paths. The bootstrap certificate is only a temporary first-deploy
-fallback; it is not the intended steady-state certificate.
+The Nginx image includes a bootstrap fallback: if the Let's Encrypt files are
+not present yet, Nginx starts with a temporary self-signed certificate. After
+issuance, recreate the Nginx container so it switches to the Let's Encrypt
+paths. The bootstrap certificate is only a first-deploy fallback; it is not the
+intended steady-state certificate.
 
 Nginx hostnames are intentionally hardcoded in `web/nginx.conf` for the current
 production domain: `aiswatch.live` and `www.aiswatch.live`. Changing the domain
@@ -41,10 +40,10 @@ the `LETSENCRYPT_CERT_NAME` value together.
 
 ## DNS
 
-Current DNS:
+Required DNS shape:
 
 ```text
-aiswatch.live      A      <production reserved static IP, currently 34.118.92.245>
+aiswatch.live      A      <reserved-static-ip>
 www.aiswatch.live  CNAME  aiswatch.live
 ```
 
@@ -55,11 +54,13 @@ dig +short aiswatch.live
 dig +short www.aiswatch.live
 ```
 
-Both names must resolve to the current production reserved static IP before
-Certbot can validate them. New or changed DNS records may require time to
-propagate. Verify resolution from more than one network, or with a public
-resolver such as `1.1.1.1` or `8.8.8.8`, before attempting certificate
-issuance.
+The apex record must resolve to the VM's reserved static IP. The `www` alias
+must resolve to the same VM, either through the CNAME above or an equivalent
+record. Do not document the concrete production IP here; use the GCP console or
+`gcloud compute addresses describe` as the source of truth. New or changed DNS
+records may require time to propagate. Verify resolution from more than one
+network, or with a public resolver such as `1.1.1.1` or `8.8.8.8`, before
+attempting certificate issuance.
 
 ## Prerequisites
 
@@ -82,13 +83,12 @@ certificate warning.
 
 HTTP on `tcp:80` must stay open for redirects and ACME HTTP-01 validation.
 Add `tcp:443` to the same VM network tag used by the public Nginx entrypoint.
-The GCP VM runbook uses `ais-prod-http`; verify the actual tag on the VM before
-creating the rule:
+Verify the actual tag on the VM before creating the rule:
 
 ```bash
-PROJECT_ID="project-10228515-1338-4278-a31"
-ZONE="europe-central2-a"
-VM_NAME="ais-prod-vm"
+PROJECT_ID="<your-project-id>"
+ZONE="<vm-zone>"
+VM_NAME="<vm-name>"
 
 gcloud compute instances describe "$VM_NAME" \
   --project="$PROJECT_ID" \
@@ -99,10 +99,10 @@ gcloud compute instances describe "$VM_NAME" \
 Set `NETWORK_TAG_HTTP` to the tag attached to the VM for public Nginx ingress:
 
 ```bash
-PROJECT_ID="project-10228515-1338-4278-a31"
-NETWORK_TAG_HTTP="ais-prod-http"
+PROJECT_ID="<your-project-id>"
+NETWORK_TAG_HTTP="<public-nginx-network-tag>"
 
-gcloud compute firewall-rules create allow-ais-prod-https \
+gcloud compute firewall-rules create allow-https-to-nginx \
   --project="$PROJECT_ID" \
   --network=default \
   --direction=INGRESS \

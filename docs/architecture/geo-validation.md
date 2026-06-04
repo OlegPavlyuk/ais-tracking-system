@@ -107,4 +107,5 @@ Related docs:
 
 - [Architecture overview](architecture.md)
 - [Architecture decisions](architecture-decisions.md)
+- [Geo validation runbook](../operations/geo-validation-runbook.md)
 - [Operations runbook](../operations/operations-runbook.md)
