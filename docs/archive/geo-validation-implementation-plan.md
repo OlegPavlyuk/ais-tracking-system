@@ -1,3 +1,19 @@
+# Archived Document
+
+Status: Historical geo-validation implementation plan.
+
+This document is preserved for historical context and decision history. It is
+not considered a canonical source of truth for the current system.
+
+Refer to the active documentation in:
+
+- `README.md`
+- `docs/architecture.md`
+- `docs/architecture-decisions.md`
+- `docs/operations-runbook.md`
+
+---
+
 # Geo Validation Implementation Plan
 
 Durable implementation plan for production-like AIS position geo validation in

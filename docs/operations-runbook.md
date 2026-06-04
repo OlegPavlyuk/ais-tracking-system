@@ -359,9 +359,17 @@ section. During geo rollout and tuning, watch:
 
 ## Manual Sanctions And DLQ Notes
 
-No production sanctions import workflow is automated in this phase. If manual
-sanctions data is added later, keep the source file private and document the
-exact import command used.
+Sanctions imports can be inspected and manually enqueued through the admin API
+when `ADMIN_TOKEN` is configured:
+
+- `GET /admin/sanctions/imports`
+- `POST /admin/sanctions/imports/ofac/run`
+
+DLQ and stream state can also be inspected through admin routes:
+
+- `GET /admin/streams`
+- `GET /admin/deadletter`
+- `POST /admin/deadletter/:id/replay`
 
 For ingestion or enrichment failures, start with:
 
@@ -369,6 +377,3 @@ For ingestion or enrichment failures, start with:
 docker compose --env-file .env.production --env-file .env.release -f docker-compose.prod.yml -f docker-compose.prod.grafana-local.yml logs --tail=300 ingestion
 docker compose --env-file .env.production --env-file .env.release -f docker-compose.prod.yml -f docker-compose.prod.grafana-local.yml logs --tail=300 worker
 ```
-
-If a Redis-backed DLQ is added later, document the exact Redis keys and safe
-inspection commands here before using them in production.

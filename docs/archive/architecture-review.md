@@ -1,3 +1,19 @@
+# Archived Document
+
+Status: Historical architecture review.
+
+This document is preserved for historical context and decision history. It is
+not considered a canonical source of truth for the current system.
+
+Refer to the active documentation in:
+
+- `README.md`
+- `docs/architecture.md`
+- `docs/architecture-decisions.md`
+- `docs/operations-runbook.md`
+
+---
+
 # AIS Tracking System - Architecture Review
 
 ## Project Overview
@@ -371,7 +387,7 @@ semantics.
 | Issue                                                          | Severity | Why It Matters                                                                                                                                                                                                                       | Recommendation                                                                                                                             |
 | -------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Historical partition lifecycle requires operational monitoring | Medium   | Daily partition maintenance is now automated, but production deployments still need alerts if maintenance fails or future partitions run low.                                                                                        | Add runbook checks and alerts for missing today/tomorrow partitions and failed maintenance runs.                                           |
-| Name/alias sanctions lookup remains basic                      | Medium   | The current worker uses indexed identifier lookups first and then a narrow name/alias fallback. That is much better than full-table scans, but richer fuzzy/transliteration matching is still out of scope.                         | Add normalized-name materialization and scored fuzzy matching only after exact identifiers, preserving candidate/manual-review semantics. |
+| Name/alias sanctions lookup remains basic                      | Medium   | The current worker uses indexed identifier lookups first and then a narrow name/alias fallback. That is much better than full-table scans, but richer fuzzy/transliteration matching is still out of scope.                          | Add normalized-name materialization and scored fuzzy matching only after exact identifiers, preserving candidate/manual-review semantics.  |
 | Realtime subscriptions are in memory                           | Medium   | Multiple API/realtime replicas would each see only their own connected clients while Redis consumer groups distribute events among consumers. Horizontal scaling could cause missed fanout unless each replica receives every event. | For multi-replica realtime, use Redis Pub/Sub or a dedicated broadcast stream/channel between stream consumers and WS pods.                |
 | Redis Streams retention is approximate and finite              | Medium   | `MAXLEN ~ 100k` bounds memory but also bounds replay. A lagging consumer can lose events if trim outruns it.                                                                                                                         | Alert on stream lag versus retention, size `STREAM_MAXLEN` from peak throughput and recovery target, and document acceptable loss windows. |
 | Integration test gaps remain                                   | Medium   | The most production-critical behavior spans Redis, BullMQ, and Postgres. Unit tests do not fully prove transaction, partition, replay, and worker semantics.                                                                         | Add Testcontainers or Docker-backed integration suites for storage, DLQ replay, sanctions import, enrichment loop, and realtime overflow.  |

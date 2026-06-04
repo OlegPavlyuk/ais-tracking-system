@@ -102,16 +102,16 @@ Storage emits `vessel.persisted.v1` after successful writes. Enrichment jobs use
 
 ## Tech Stack
 
-| Area | Technology |
-| --- | --- |
-| Backend | Node.js 22, TypeScript, NestJS |
-| Messaging | Redis Streams, Redis consumer groups, BullMQ |
-| Database | PostgreSQL 16, PostGIS, Drizzle migrations |
-| Realtime | Raw `ws` WebSocket server |
-| Validation | Zod |
-| Observability | pino, prom-client, Prometheus, Grafana |
-| Frontend | React, Vite, MapLibre GL, Zustand |
-| Testing | Jest, Testcontainers, Vitest, Testing Library |
+| Area           | Technology                                                           |
+| -------------- | -------------------------------------------------------------------- |
+| Backend        | Node.js 22, TypeScript, NestJS                                       |
+| Messaging      | Redis Streams, Redis consumer groups, BullMQ                         |
+| Database       | PostgreSQL 16, PostGIS, Drizzle migrations                           |
+| Realtime       | Raw `ws` WebSocket server                                            |
+| Validation     | Zod                                                                  |
+| Observability  | pino, prom-client, Prometheus, Grafana                               |
+| Frontend       | React, Vite, MapLibre GL, Zustand                                    |
+| Testing        | Jest, Testcontainers, Vitest, Testing Library                        |
 | Infrastructure | Docker, Docker Compose, Nginx, GitHub Actions, GCP Artifact Registry |
 
 ## Reliability and Scalability
@@ -129,13 +129,13 @@ Storage emits `vessel.persisted.v1` after successful writes. Enrichment jobs use
 
 Representative endpoints:
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/vessels` | Latest vessel snapshot for map bootstrap |
-| `GET /api/vessels/:id` | Vessel profile, latest position, sanctions state |
+| Endpoint                     | Purpose                                             |
+| ---------------------------- | --------------------------------------------------- |
+| `GET /api/vessels`           | Latest vessel snapshot for map bootstrap            |
+| `GET /api/vessels/:id`       | Vessel profile, latest position, sanctions state    |
 | `GET /api/vessels/:id/track` | Historical track query with optional simplification |
-| `WS /ws/positions` | Realtime position, static, and enrichment updates |
-| `GET /readyz` | DB/Redis readiness plus feed degradation signal |
+| `WS /ws/positions`           | Realtime position, static, and enrichment updates   |
+| `GET /readyz`                | DB/Redis readiness plus feed degradation signal     |
 
 Admin routes support DLQ inspection/replay and sanctions import operations, guarded by `x-admin-token` and blocked publicly by the production Nginx config.
 
@@ -201,7 +201,7 @@ docs/          architecture, deployment, operations, restore notes
 
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
-- [`docs/architecture-review.md`](docs/architecture-review.md)
 - [`docs/operations-runbook.md`](docs/operations-runbook.md)
-- [`docs/deployment-ci-cd-plan.md`](docs/deployment-ci-cd-plan.md)
+- [`docs/gcp-vm-runbook.md`](docs/gcp-vm-runbook.md)
+- [`docs/https-domain-runbook.md`](docs/https-domain-runbook.md)
 - [`docs/restore-drill.md`](docs/restore-drill.md)

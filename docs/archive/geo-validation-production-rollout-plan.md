@@ -1,12 +1,28 @@
+# Archived Document
+
+Status: Historical geo-validation production rollout plan.
+
+This document is preserved for historical context and decision history. It is
+not considered a canonical source of truth for the current production rollout.
+
+Refer to the active documentation in:
+
+- `README.md`
+- `docs/architecture.md`
+- `docs/operations-runbook.md`
+- `docs/restore-drill.md`
+
+---
+
 # Geo Validation Production Rollout Plan
 
 This document captures the production rollout plan for the PostGIS-backed
 GeoValidation runtime and GeoImport workflow.
 
 It is intentionally operational and deployment-focused. The durable feature
-architecture remains in `docs/geo-validation-implementation-plan.md`; this
-document explains how to deploy it safely on the current GCP VM Docker Compose
-production stack.
+architecture remains in `docs/archive/geo-validation-implementation-plan.md`;
+this document explains how to deploy it safely on the current GCP VM Docker
+Compose production stack.
 
 ## Current Production Deployment Model
 
