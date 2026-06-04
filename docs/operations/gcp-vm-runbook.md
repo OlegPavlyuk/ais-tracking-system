@@ -1,337 +1,75 @@
 # GCP VM Runbook
 
-This runbook prepares the first production-like AIS Tracking System deployment
-on one Google Cloud Compute Engine VM running Docker Compose.
+This runbook is the operational reference for the production VM environment.
+It assumes the GCP project, VM, Artifact Registry repository, static IP, and
+firewall rules already exist.
 
-Use **Compute Engine / VM** for this phase. Do not choose Cloud Run, Cloud SQL,
-GKE, or Memorystore for the initial deployment. Those are useful future options,
-but the current plan is one cost-conscious VM with self-hosted Postgres/PostGIS,
-Redis, Nginx, Prometheus, and private Grafana.
-
-## What This Phase Creates
-
-- one GCP project, or one selected existing project;
-- required APIs enabled;
-- one Artifact Registry Docker repository;
-- one static external IP address;
-- one Compute Engine VM;
-- one VM service account that can pull images from Artifact Registry;
-- firewall rules that expose HTTP/HTTPS publicly and restrict SSH;
-- Docker Engine and the Docker Compose plugin on the VM;
-- `/opt/ais-tracking-system` as the stable app directory;
-- a real `.env.production` file on the VM, never committed;
-- private Grafana access through an SSH tunnel.
-
-This phase does not create Cloud SQL, Memorystore, Cloud Run, or public
-Prometheus/Grafana access. Domain and HTTPS setup is covered in
-`docs/operations/https-domain-runbook.md`.
+The deployment runs on one Google Cloud Compute Engine VM with Docker Compose.
+It intentionally does not use Cloud Run, Cloud SQL, Memorystore, GKE, or public
+Prometheus/Grafana access.
 
 Related runbooks:
 
 - Day-two operations: `docs/operations/operations-runbook.md`
+- GitHub deployment auth: `docs/operations/github-oidc-deployment.md`
 - HTTPS/domain/TLS: `docs/operations/https-domain-runbook.md`
+- Geo validation operations: `docs/operations/geo-validation-runbook.md`
 - Restore drills: `docs/operations/restore-drill.md`
 
-## Recommended Starting Values
+## Production VM Shape
 
-Adjust names if needed, but keep one region/zone for the first deployment.
+Current deployment defaults used by the GitHub workflow:
 
 ```bash
-PROJECT_ID="your-gcp-project-id"
-REGION="europe-central2"
-ZONE="europe-central2-a"
-AR_REPOSITORY="ais-tracking-system"
-VM_NAME="ais-prod-vm"
-VM_SERVICE_ACCOUNT="ais-vm-runner"
-NETWORK_TAG_HTTP="ais-prod-http"
-NETWORK_TAG_SSH="ais-prod-ssh"
-STATIC_IP_NAME="ais-prod-ip"
+PROJECT_ID="<your-project-id>"
+REGION="<artifact-registry-region>"
+ZONE="<vm-zone>"
+AR_REPOSITORY="<artifact-registry-repository>"
+VM_NAME="<vm-name>"
 APP_DIR="/opt/ais-tracking-system"
 ```
 
-Cost-conscious VM recommendation:
+The VM runs:
 
-- Machine type: `e2-medium` initially.
-- Boot disk: 50 GB balanced persistent disk, Debian 12 or Ubuntu 22.04 LTS.
-- External IP: reserved static IP.
+- Docker Engine and the Docker Compose plugin;
+- Nginx on public HTTP/HTTPS ports;
+- API, ingestion, and worker containers from the backend image;
+- Postgres/PostGIS and Redis volumes on the VM;
+- Prometheus and private Grafana;
+- one-off migrator and geo-import services when explicitly run.
 
-`e2-small` may work for light demos, but Postgres, Redis, API, ingestion,
-worker, Prometheus, Grafana, and Nginx can get cramped on 2 GB RAM.
+The active release is represented by image tags in `.env.release`, not by a
+local build on the VM.
 
-## If You Are In The GCP Console
+## Access
 
-If you are on the Google Cloud "Create" page and see options such as **Create
-VM**, **Create a database**, **Deploy an application**, **Cloud Run**, **Cloud
-SQL**, or **Compute Engine**, choose **Compute Engine** and then **Create VM**.
-
-For this phase:
-
-- Choose **Compute Engine / Create VM**.
-- Do not choose **Cloud Run**.
-- Do not choose **Cloud SQL**.
-- Do not choose **Deploy an application**.
-- Do not create a public database.
-
-The database and Redis containers will run privately inside Docker Compose on
-the VM.
-
-## 1. Select Or Create A Project
-
-Console path:
-
-1. Open the project picker in the top bar.
-2. Select an existing project or click **New Project**.
-3. Give it a clear name, for example `ais-tracking-system`.
-4. Make sure billing is attached to the project.
-
-`gcloud`:
+Use IAP tunneling for SSH when available:
 
 ```bash
-gcloud projects create "$PROJECT_ID" --name="AIS Tracking System"
-gcloud config set project "$PROJECT_ID"
-gcloud billing projects link "$PROJECT_ID" --billing-account="YOUR_BILLING_ACCOUNT_ID"
-```
-
-If you already created the project in the Console:
-
-```bash
-gcloud config set project "$PROJECT_ID"
-gcloud config get-value project
-```
-
-## 2. Enable Required APIs
-
-Console path:
-
-1. Go to **APIs & Services**.
-2. Click **Enable APIs and Services**.
-3. Enable **Compute Engine API**.
-4. Enable **Artifact Registry API**.
-5. Enable **IAM Service Account Credentials API** if you plan to use service
-   account impersonation later.
-
-`gcloud`:
-
-```bash
-gcloud services enable \
-  compute.googleapis.com \
-  artifactregistry.googleapis.com \
-  iamcredentials.googleapis.com
-```
-
-## 3. Create Artifact Registry
-
-Console path:
-
-1. Go to **Artifact Registry**.
-2. Click **Create Repository**.
-3. Name: `ais-tracking-system`.
-4. Format: **Docker**.
-5. Mode: **Standard**.
-6. Location type: **Region**.
-7. Region: `europe-central2` or your selected region.
-
-`gcloud`:
-
-```bash
-gcloud artifacts repositories create "$AR_REPOSITORY" \
-  --repository-format=docker \
-  --location="$REGION" \
-  --description="AIS Tracking System Docker images"
-```
-
-Check:
-
-```bash
-gcloud artifacts repositories list --location="$REGION"
-```
-
-Image names will look like this later:
-
-```text
-europe-central2-docker.pkg.dev/PROJECT_ID/ais-tracking-system/backend:GIT_SHA
-europe-central2-docker.pkg.dev/PROJECT_ID/ais-tracking-system/migrator:GIT_SHA
-europe-central2-docker.pkg.dev/PROJECT_ID/ais-tracking-system/frontend:GIT_SHA
-```
-
-## 4. Create The VM Service Account
-
-The VM needs permission to pull images, not to push them.
-
-```bash
-gcloud iam service-accounts create "$VM_SERVICE_ACCOUNT" \
-  --display-name="AIS production VM runner"
-
-VM_SERVICE_ACCOUNT_EMAIL="$VM_SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
-
-gcloud artifacts repositories add-iam-policy-binding "$AR_REPOSITORY" \
-  --location="$REGION" \
-  --member="serviceAccount:$VM_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/artifactregistry.reader"
-```
-
-Optional but useful for VM logs:
-
-```bash
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:$VM_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/logging.logWriter"
-```
-
-Do not create or commit a JSON service account key for the VM. Attach the
-service account to the VM instead.
-
-## 5. Reserve A Static External IP
-
-Console path:
-
-1. Go to **VPC network** -> **IP addresses**.
-2. Click **Reserve external static IP address**.
-3. Name: `ais-prod-ip`.
-4. Network service tier: **Premium**.
-5. IP version: **IPv4**.
-6. Type: **Regional**.
-7. Region: your selected region.
-
-`gcloud`:
-
-```bash
-gcloud compute addresses create "$STATIC_IP_NAME" --region="$REGION"
-gcloud compute addresses describe "$STATIC_IP_NAME" --region="$REGION" --format="get(address)"
-```
-
-Check:
-
-```bash
-gcloud compute addresses list
-```
-
-## 6. Create Firewall Rules
-
-Only HTTP and HTTPS should be public. HTTP remains open for redirects and ACME
-HTTP-01 validation. SSH should be restricted to your current public IP address,
-or to IAP later.
-
-Find your current public IP:
-
-```bash
-curl -4 ifconfig.me
-```
-
-Set it as a `/32` source range:
-
-```bash
-MY_IP_CIDR="YOUR_PUBLIC_IP/32"
-```
-
-Create HTTP ingress:
-
-```bash
-gcloud compute firewall-rules create allow-ais-prod-http \
-  --network=default \
-  --direction=INGRESS \
-  --priority=1000 \
-  --action=ALLOW \
-  --rules=tcp:80 \
-  --source-ranges=0.0.0.0/0 \
-  --target-tags="$NETWORK_TAG_HTTP"
-```
-
-Create HTTPS ingress:
-
-```bash
-gcloud compute firewall-rules create allow-ais-prod-https \
-  --network=default \
-  --direction=INGRESS \
-  --priority=1000 \
-  --action=ALLOW \
-  --rules=tcp:443 \
-  --source-ranges=0.0.0.0/0 \
-  --target-tags="$NETWORK_TAG_HTTP"
-```
-
-Create restricted SSH ingress:
-
-```bash
-gcloud compute firewall-rules create allow-ais-prod-ssh \
-  --network=default \
-  --direction=INGRESS \
-  --priority=1000 \
-  --action=ALLOW \
-  --rules=tcp:22 \
-  --source-ranges="$MY_IP_CIDR" \
-  --target-tags="$NETWORK_TAG_SSH"
-```
-
-Do not create public firewall rules for these ports:
-
-- Postgres: `5432`
-- Redis: `6379`
-- Prometheus: `9090`
-- Grafana: `3000` or `3001`
-- API container port: `3000`
-
-Check:
-
-```bash
-gcloud compute firewall-rules list
-```
-
-## 7. Create The Compute Engine VM
-
-Console path:
-
-1. Go to **Compute Engine** -> **VM instances**.
-2. Click **Create instance**.
-3. Name: `ais-prod-vm`.
-4. Region: `europe-central2`.
-5. Zone: `europe-central2-a`.
-6. Machine type: `e2-medium`.
-7. Boot disk: Debian 12 or Ubuntu 22.04 LTS, 50 GB balanced persistent disk.
-8. Firewall checkboxes: you may leave HTTP/HTTPS unchecked if you created the
-   tag-based firewall rule above.
-9. Network tags: add `ais-prod-http` and `ais-prod-ssh`.
-10. Network interface external IPv4 address: choose the reserved static IP.
-11. Service account: choose `ais-vm-runner`.
-12. Access scopes: **Allow default access** is enough when IAM is granted on the
-    service account.
-13. Click **Create**.
-
-`gcloud`:
-
-```bash
-STATIC_IP_ADDRESS="$(gcloud compute addresses describe "$STATIC_IP_NAME" \
-  --region="$REGION" \
-  --format="get(address)")"
-
-gcloud compute instances create "$VM_NAME" \
+gcloud compute ssh "$VM_NAME" \
   --zone="$ZONE" \
-  --machine-type=e2-medium \
-  --image-family=debian-12 \
-  --image-project=debian-cloud \
-  --boot-disk-size=50GB \
-  --boot-disk-type=pd-balanced \
-  --address="$STATIC_IP_ADDRESS" \
-  --tags="$NETWORK_TAG_HTTP,$NETWORK_TAG_SSH" \
-  --service-account="$VM_SERVICE_ACCOUNT_EMAIL" \
-  --scopes=https://www.googleapis.com/auth/cloud-platform
+  --tunnel-through-iap
 ```
 
-## 8. Install Docker And Compose On The VM
+If direct SSH ingress is still enabled, keep it restricted. Do not expose
+Postgres, Redis, Prometheus, Grafana, or backend container ports publicly.
 
-SSH to the VM:
+The deployment workflow also defaults to IAP. See
+`docs/operations/github-oidc-deployment.md` for the GitHub-side service account,
+Workload Identity Federation, and deployment permissions.
+
+## Docker And Compose
+
+Verify Docker and Compose on the VM:
 
 ```bash
-gcloud compute ssh "$VM_NAME" --zone="$ZONE"
+docker --version
+docker compose version
 ```
 
-On the VM:
+If Docker needs to be installed or repaired on a Debian VM:
 
 ```bash
-REGION="europe-central2"
-PROJECT_ID="your-gcp-project-id"
-AR_REPOSITORY="ais-tracking-system"
-
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg
 sudo install -m 0755 -d /etc/apt/keyrings
@@ -351,120 +89,152 @@ newgrp docker
 docker compose version
 ```
 
-If you choose an Ubuntu image, use Docker's Ubuntu repository URL instead of the
-Debian URL above.
+If the VM user is not in the `docker` group, use
+`AIS_DEPLOY_USE_SUDO_DOCKER=true` with project scripts.
 
-Check whether the Google Cloud CLI is already installed on the VM:
+## Docker Authentication
 
-```bash
-gcloud --version
-```
-
-If `gcloud` is missing, install it:
+The VM service account needs Artifact Registry read access for the repository.
+Configure Docker credential helpers on the VM:
 
 ```bash
-curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-  | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
-  | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y google-cloud-cli
-gcloud --version
+gcloud auth configure-docker europe-central2-docker.pkg.dev
 ```
 
-## 9. Authenticate Docker To Artifact Registry
-
-On the VM:
-
-```bash
-gcloud auth configure-docker "$REGION-docker.pkg.dev"
-```
-
-Then test a pull after at least one image has been pushed to Artifact Registry:
+After at least one deployment image exists, verify a pull:
 
 ```bash
 docker pull "$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPOSITORY/frontend:GIT_SHA"
 ```
 
-If no AIS images have been pushed yet, this check is expected to wait until the
-image publishing phase.
+If pull fails, check:
 
-## 10. Prepare The App Directory
+- the VM is using the expected service account;
+- the service account has `roles/artifactregistry.reader` on the repository;
+- Docker credential helpers were configured for `europe-central2-docker.pkg.dev`;
+- `.env.release` points at pushed SHA-tagged images.
 
-On the VM:
+## Application Directory
 
-```bash
-sudo mkdir -p /opt/ais-tracking-system
-sudo chown "$USER:$USER" /opt/ais-tracking-system
-cd /opt/ais-tracking-system
+The stable app directory is:
+
+```text
+/opt/ais-tracking-system
 ```
 
-For the first manual bootstrap, copy or clone the repository contents needed to
-run Compose:
+It should contain:
 
-```bash
-git clone https://github.com/OlegPavlyuk/ais-tracking-system.git .
+```text
+.env.production
+.env.release
+.deploy/releases/current.env
+.deploy/releases/previous.env
+docker-compose.prod.yml
+docker-compose.prod.grafana-local.yml
+docker/
+scripts/
 ```
 
-Later, the CD workflow will update this directory automatically. Do not build
-that deploy workflow in this phase.
+The deployment workflow copies Compose files, `docker/`, and `scripts/` to the
+VM before running `scripts/deploy/deploy.sh`. It does not create
+`.env.production`; that file is managed on the VM.
 
-## 11. Create The Production Env File Securely
+## Environment Files
 
-On the VM:
+`.env.production` contains durable configuration and secrets. It should be
+created from `.env.production.example`, edited on the VM, and kept out of Git.
 
 ```bash
 cd /opt/ais-tracking-system
 cp .env.production.example .env.production
 chmod 600 .env.production
-```
-
-Edit the file on the VM:
-
-```bash
 nano .env.production
 ```
 
-Replace every `change-me` value with a strong unique secret. Do not use the
-example values on the VM.
-
-Generate secrets on the VM:
+Replace every `change-me` value with a strong unique secret:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Set image names to Artifact Registry image tags once images exist:
+Runtime image tags normally come from `.env.release`, which is generated by the
+deploy script. It includes:
 
 ```text
-AIS_BACKEND_IMAGE=europe-central2-docker.pkg.dev/PROJECT_ID/ais-tracking-system/backend:GIT_SHA
-AIS_MIGRATOR_IMAGE=europe-central2-docker.pkg.dev/PROJECT_ID/ais-tracking-system/migrator:GIT_SHA
-AIS_FRONTEND_IMAGE=europe-central2-docker.pkg.dev/PROJECT_ID/ais-tracking-system/frontend:GIT_SHA
+DEPLOY_SHA
+DEPLOYED_AT
+AIS_BACKEND_IMAGE
+AIS_MIGRATOR_IMAGE
+AIS_GEO_IMPORT_IMAGE
+AIS_FRONTEND_IMAGE
 ```
 
-Never commit `.env.production`. It is ignored by Git and should exist only on
-the VM or in a secure secret manager later.
+Do not hand-edit `.env.release` during normal operation. Use rollback if you
+need to return to the previous image set.
 
-## 12. Private Grafana Access
+## Compose Helper
 
-Grafana must not be public. Use the local-only Compose override in this repo:
+Most VM commands can use this helper:
 
 ```bash
-docker compose \
-  --env-file .env.production \
-  -f docker-compose.prod.yml \
-  -f docker-compose.prod.grafana-local.yml \
-  up -d
+cd /opt/ais-tracking-system
+export AIS_DEPLOY_USE_SUDO_DOCKER=true
+
+docker_cmd() {
+  if [ "${AIS_DEPLOY_USE_SUDO_DOCKER:-false}" = "true" ]; then
+    sudo docker "$@"
+  else
+    docker "$@"
+  fi
+}
+
+compose() {
+  docker_cmd compose \
+    --env-file .env.production \
+    --env-file .env.release \
+    -f docker-compose.prod.yml \
+    -f docker-compose.prod.grafana-local.yml \
+    "$@"
+}
 ```
 
-The override binds Grafana to `127.0.0.1:3001` on the VM only. It is not
-reachable from the public internet.
+Use the Grafana local override unless you intentionally disable private Grafana
+tunnel access.
 
-From your laptop, create an SSH tunnel:
+## Bootstrap Validation
+
+Run on the VM:
+
+```bash
+gcloud --version
+docker compose version
+gcloud auth configure-docker europe-central2-docker.pkg.dev
+compose ps
+scripts/deploy/smoke-check.sh
+```
+
+Public checks from your laptop:
+
+```bash
+curl -I "http://aiswatch.live/"
+curl -i "https://aiswatch.live/api/vessels?limit=1"
+curl -i "https://aiswatch.live/healthz"
+curl -i "https://aiswatch.live/readyz"
+curl -i "https://aiswatch.live/metrics"
+curl -i "https://aiswatch.live/admin"
+```
+
+HTTP should redirect to HTTPS. `/metrics` and `/admin` should return `404`.
+
+## Private Grafana
+
+The local Grafana override binds Grafana to `127.0.0.1:3001` on the VM only.
+From your laptop:
 
 ```bash
 gcloud compute ssh "$VM_NAME" \
   --zone="$ZONE" \
+  --tunnel-through-iap \
   -- -L 3001:127.0.0.1:3001
 ```
 
@@ -474,242 +244,55 @@ Then open:
 http://127.0.0.1:3001
 ```
 
-Use `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` from the VM's
-`.env.production`.
+Use `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` from `.env.production`.
 
-## 13. Bootstrap Checks
+## IAP And SSH Hardening
 
-Run locally:
-
-```bash
-gcloud compute addresses list
-gcloud compute firewall-rules list
-gcloud artifacts repositories list --location="$REGION"
-```
-
-Run on the VM:
+The deployment workflow defaults to `GCP_USE_IAP=true`. The VM firewall must
+allow SSH from Google's IAP TCP forwarding range:
 
 ```bash
-docker compose version
-gcloud auth configure-docker "$REGION-docker.pkg.dev"
+gcloud compute firewall-rules describe allow-ais-prod-ssh-iap
 ```
 
-When images exist in Artifact Registry, verify the VM can pull them:
-
-```bash
-docker pull "$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPOSITORY/frontend:GIT_SHA"
-```
-
-After the stack is started and the certificate is issued, public checks should
-be limited to:
-
-```bash
-curl -I "http://aiswatch.live/"
-curl -i "https://aiswatch.live/api/vessels?limit=1"
-curl -i "https://aiswatch.live/healthz"
-curl -i "https://aiswatch.live/readyz"
-```
-
-These should not be publicly reachable:
-
-```bash
-curl -i "https://aiswatch.live/metrics"
-curl -i "https://aiswatch.live/admin"
-```
-
-Do not test or expose Postgres, Redis, Prometheus, or Grafana through public
-firewall rules.
-
-## 14. IAP Hardening Later
-
-Restricting SSH to your own public IP is acceptable for the first deployment.
-Google Cloud IAP for TCP forwarding is the preferred hardening path when
-practical. It can replace direct SSH ingress later by allowing source range
-`35.235.240.0/20` and using:
-
-```bash
-gcloud compute ssh "$VM_NAME" --zone="$ZONE" --tunnel-through-iap
-```
-
-Do not let IAP setup block this first VM bootstrap unless it is straightforward
-in your project.
-
-## 15. GitHub OIDC Deployment Setup
-
-The production deployment workflow is `.github/workflows/deploy.yml`. After CI
-succeeds on `main` or `master`, it builds and pushes SHA-tagged images, waits
-for approval on the GitHub `production` environment, then deploys those exact
-tags to the VM. It can also be run manually for an exact SHA.
-
-Images are pushed to:
+Expected source range:
 
 ```text
-europe-central2-docker.pkg.dev/project-10228515-1338-4278-a31/ais-tracking-system/backend:<git-sha>
-europe-central2-docker.pkg.dev/project-10228515-1338-4278-a31/ais-tracking-system/migrator:<git-sha>
-europe-central2-docker.pkg.dev/project-10228515-1338-4278-a31/ais-tracking-system/frontend:<git-sha>
+35.235.240.0/20
 ```
 
-Prefer Workload Identity Federation instead of a JSON service account key.
-
-Create a GitHub deploy service account:
+OS Login should be enabled for the project or VM:
 
 ```bash
-PROJECT_ID="project-10228515-1338-4278-a31"
-PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
-REGION="europe-central2"
-AR_REPOSITORY="ais-tracking-system"
-GITHUB_REPOSITORY="OlegPavlyuk/ais-tracking-system"
-GITHUB_POOL="github"
-GITHUB_PROVIDER="github-actions"
-GITHUB_DEPLOY_SERVICE_ACCOUNT="ais-github-deployer"
-GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL="$GITHUB_DEPLOY_SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
-
-gcloud iam service-accounts create "$GITHUB_DEPLOY_SERVICE_ACCOUNT" \
-  --project="$PROJECT_ID" \
-  --display-name="AIS GitHub deployer"
+gcloud compute project-info describe \
+  --format="value(commonInstanceMetadata.items.enable-oslogin)"
 ```
 
-Grant least-privilege deployment permissions:
+To test IAP access:
 
 ```bash
-gcloud artifacts repositories add-iam-policy-binding "$AR_REPOSITORY" \
-  --project="$PROJECT_ID" \
-  --location="$REGION" \
-  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/artifactregistry.writer"
-
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/compute.viewer"
-
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/compute.osAdminLogin"
+gcloud compute ssh "$VM_NAME" \
+  --zone="$ZONE" \
+  --tunnel-through-iap
 ```
 
-`roles/compute.osAdminLogin` is used so the deploy workflow can prepare
-`/opt/ais-tracking-system` and run Docker through `sudo` without requiring the
-GitHub OS Login user to be pre-added to the VM's `docker` group.
+## Deployment And Rollback
 
-If the workflow uses IAP, also grant:
+Normal deployments run through GitHub Actions. The VM-side deploy script:
 
-```bash
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/iap.tunnelResourceAccessor"
-```
+1. writes next release metadata;
+2. pulls images;
+3. runs the migrator;
+4. starts Compose services;
+5. runs smoke checks;
+6. records current and previous release metadata.
 
-Create the Workload Identity Pool and provider:
-
-```bash
-gcloud iam workload-identity-pools create "$GITHUB_POOL" \
-  --project="$PROJECT_ID" \
-  --location="global" \
-  --display-name="GitHub Actions"
-
-gcloud iam workload-identity-pools providers create-oidc "$GITHUB_PROVIDER" \
-  --project="$PROJECT_ID" \
-  --location="global" \
-  --workload-identity-pool="$GITHUB_POOL" \
-  --display-name="GitHub Actions OIDC" \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
-  --attribute-condition="assertion.repository=='$GITHUB_REPOSITORY'"
-```
-
-Allow this repository to impersonate the deploy service account:
-
-```bash
-gcloud iam service-accounts add-iam-policy-binding "$GITHUB_DEPLOY_SERVICE_ACCOUNT_EMAIL" \
-  --project="$PROJECT_ID" \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$GITHUB_POOL/attribute.repository/$GITHUB_REPOSITORY"
-```
-
-Add these GitHub repository or environment secrets:
-
-```text
-GCP_WORKLOAD_IDENTITY_PROVIDER=projects/<project-number>/locations/global/workloadIdentityPools/github/providers/github-actions
-GCP_DEPLOY_SERVICE_ACCOUNT=ais-github-deployer@project-10228515-1338-4278-a31.iam.gserviceaccount.com
-```
-
-Add these GitHub `production` environment variables if your VM names differ
-from the workflow defaults:
-
-```text
-GCE_VM_NAME=ais-prod-vm
-GCE_ZONE=europe-central2-a
-GCE_APP_DIR=/opt/ais-tracking-system
-GCP_USE_IAP=true
-```
-
-In GitHub, create an environment named `production` and enable required
-reviewers. The deployment job will pause there before touching the VM.
-
-## 16. IAP For GitHub Deployments
-
-The deployment workflow defaults to `GCP_USE_IAP=true`. For that to work, the VM
-must allow SSH from Google's IAP TCP forwarding range:
-
-```bash
-gcloud compute firewall-rules create allow-ais-prod-ssh-iap \
-  --project="$PROJECT_ID" \
-  --network=default \
-  --direction=INGRESS \
-  --priority=1000 \
-  --action=ALLOW \
-  --rules=tcp:22 \
-  --source-ranges=35.235.240.0/20 \
-  --target-tags="$NETWORK_TAG_SSH"
-```
-
-Enable OS Login for the project or the VM:
-
-```bash
-gcloud compute project-info add-metadata \
-  --project="$PROJECT_ID" \
-  --metadata=enable-oslogin=TRUE
-```
-
-Test IAP SSH from your machine:
-
-```bash
-gcloud compute ssh "$VM_NAME" --zone="$ZONE" --tunnel-through-iap
-```
-
-## 17. Running A Deployment
-
-Automatic path:
-
-1. Push or merge to `main`.
-2. Wait for **CI** to succeed.
-3. Open the queued **Deploy** workflow run.
-4. Approve the `production` environment deployment.
-
-Manual path:
-
-1. Go to **GitHub** -> **Actions** -> **Deploy**.
-2. Click **Run workflow**.
-3. Leave `git_sha` empty to deploy the selected branch SHA, or enter an exact
-   commit SHA.
-4. Wait for image builds and pushes.
-5. Approve the `production` environment deployment.
-
-The VM deploy script writes:
-
-```text
-/opt/ais-tracking-system/.env.release
-/opt/ais-tracking-system/.deploy/releases/current.env
-/opt/ais-tracking-system/.deploy/releases/previous.env
-```
-
-The deployment fails loudly if image pull, migration, service restart, or smoke
-checks fail. If smoke checks fail and a previous release exists, the script
-attempts to roll containers back to the previous image metadata.
-
-Manual rollback command on the VM:
+Manual rollback on the VM:
 
 ```bash
 cd /opt/ais-tracking-system
 AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/rollback.sh --app-dir /opt/ais-tracking-system
 ```
+
+Rollback changes container image metadata only. It does not roll back database
+schema changes; use `docs/operations/restore-drill.md` for restore procedures.

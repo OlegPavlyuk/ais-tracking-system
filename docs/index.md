@@ -26,6 +26,8 @@ Deployment, infrastructure, backups, monitoring, and operational procedures.
 
 - [Deployment](operations/deployment.md)
 - [GCP VM runbook](operations/gcp-vm-runbook.md)
+- [GitHub OIDC deployment](operations/github-oidc-deployment.md)
+- [Geo validation runbook](operations/geo-validation-runbook.md)
 - [HTTPS and domain runbook](operations/https-domain-runbook.md)
 - [Operations runbook](operations/operations-runbook.md)
 - [Restore drill](operations/restore-drill.md)

@@ -26,6 +26,8 @@ Rollback uses the previous image metadata recorded under `.deploy/releases` on t
 Related docs:
 
 - [GCP VM runbook](gcp-vm-runbook.md)
+- [GitHub OIDC deployment](github-oidc-deployment.md)
+- [Geo validation runbook](geo-validation-runbook.md)
 - [HTTPS and domain runbook](https-domain-runbook.md)
 - [Operations runbook](operations-runbook.md)
 - [Restore drill](restore-drill.md)
