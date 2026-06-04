@@ -1,3 +1,20 @@
+# Archived Document
+
+Status: Historical deployment implementation plan.
+
+This document is preserved for historical context and decision history. It is
+not considered a canonical source of truth for the current deployment.
+
+Refer to the active documentation in:
+
+- `README.md`
+- `docs/operations/gcp-vm-runbook.md`
+- `docs/operations/https-domain-runbook.md`
+- `docs/operations/operations-runbook.md`
+- `docs/operations/restore-drill.md`
+
+---
+
 # Deployment and CI/CD Plan
 
 This document captures the agreed production-like deployment direction for the
@@ -101,6 +118,7 @@ Nginx container, public ports 80 only at first
 Nginx is the only public container entrypoint in the initial deployment.
 
 Responsibilities:
+
 - serve the frontend at `/`;
 - reverse proxy REST API requests under `/api`;
 - reverse proxy `ws://<VM_STATIC_IP>/ws/positions` with correct WebSocket
@@ -115,6 +133,7 @@ Responsibilities:
 
 The frontend should be built as a production Vite artifact. It can be served
 either:
+
 - from an Nginx image that contains the built static files; or
 - from a dedicated static frontend container behind the main Nginx proxy.
 
@@ -131,6 +150,7 @@ PROCESS_ROLE=api
 ```
 
 It owns:
+
 - `ApiModule`;
 - `AdminModule`;
 - `RealtimeModule`;
@@ -150,6 +170,7 @@ PROCESS_ROLE=ingestion
 ```
 
 It owns:
+
 - `IngestionModule`;
 - `PipelineModule`;
 - `StorageModule`;
@@ -170,6 +191,7 @@ PROCESS_ROLE=worker
 ```
 
 It owns:
+
 - `EnrichmentModule`;
 - enrichment and sanctions background work included in that module;
 - BullMQ processors and scheduled/recurring enrichment work owned by the
@@ -195,6 +217,7 @@ backward-compatible, rollback must be treated as a manual database operation.
 Postgres runs privately on the Docker network with a persistent volume.
 
 Requirements:
+
 - no public host port;
 - strong production password;
 - persistent storage;
@@ -211,6 +234,7 @@ simplicity.
 Redis runs privately on the Docker network with AOF enabled.
 
 Requirements:
+
 - no public host port;
 - persistent storage;
 - AOF enabled with an explicit fsync policy;
@@ -231,10 +255,12 @@ AOF-style durability against this application's recovery expectations.
 Prometheus and Grafana run privately at first.
 
 Initial access:
+
 - SSH tunnel to VM; or
 - GCP IAP or another restricted operator-only path.
 
 Initial non-goals:
+
 - no public Grafana;
 - no public Prometheus;
 - no public `/metrics`.
@@ -249,6 +275,7 @@ and a clear reason to expose it.
 ### Persistent Volumes
 
 At minimum, persist:
+
 - Postgres data directory;
 - Redis data directory;
 - Grafana data directory;
@@ -304,6 +331,7 @@ depend on it explicitly instead of importing source across package boundaries.
 ### Main/Master Workflow
 
 Pushes to `main` or `master` should:
+
 - run the same CI gates;
 - build production Docker images;
 - push images to Artifact Registry;
@@ -315,6 +343,7 @@ Pushes to `main` or `master` should:
 Use immutable tags for deployments.
 
 Recommended tags:
+
 - `backend:<git-sha>`
 - `backend:main-latest` or `backend:master-latest` for convenience only;
 - `frontend:<git-sha>` if frontend is packaged as its own image;
@@ -325,6 +354,7 @@ Deployment should always use the exact Git SHA tag, not `latest`.
 The backend runtime and migrator can be built from the same Dockerfile using
 different targets. If publishing a separate migrator image simplifies Compose,
 use:
+
 - `backend:<git-sha>`
 - `backend-migrator:<git-sha>`
 
@@ -335,6 +365,7 @@ Otherwise, use one backend image with explicit Compose commands for migration.
 Use GCP Artifact Registry as the image registry.
 
 Implementation requirements:
+
 - create a Docker repository in the chosen GCP region;
 - configure GitHub Actions authentication using OIDC where practical;
 - grant the CI service account permission to push images;
@@ -347,6 +378,7 @@ Implementation requirements:
 Use a protected GitHub Environment, for example `production`.
 
 Deployment should pause for approval after:
+
 - CI succeeds;
 - Docker images are built and pushed;
 - the exact image tag is known.
@@ -359,6 +391,7 @@ The first deployment mechanism can be SSH-based because it is simple,
 transparent, and appropriate for a single VM.
 
 The deploy job should:
+
 - authenticate to GCP;
 - connect to the VM using SSH, preferably through IAP if practical;
 - update a release env file with exact image tags;
@@ -369,6 +402,7 @@ The deploy job should:
 - keep enough release metadata to roll back to the previous image tag.
 
 The VM should have:
+
 - Docker and Compose plugin installed;
 - access to Artifact Registry;
 - production Compose files checked out or deployed under a stable path such as
@@ -387,6 +421,7 @@ Deployment order:
 5. If smoke checks fail, roll back containers to previous image tag when safe.
 
 Migration rules:
+
 - migrations are forward-only by default;
 - destructive migrations require manual review and a tested backup;
 - application code should remain compatible with the previous schema when
@@ -411,6 +446,7 @@ readiness and uses `-k` for local HTTPS checks so the bootstrap self-signed
 certificate does not block deployment before Let's Encrypt issuance.
 
 Additional checks:
+
 - inspect `docker compose ps`;
 - verify `api`, `ingestion`, and `worker` containers are running;
 - verify Postgres and Redis health checks are healthy;
@@ -426,11 +462,13 @@ Nginx should expose `/healthz` and `/readyz` publicly by proxying to
 ### Rollback Strategy
 
 Container rollback:
+
 - store previous deployed Git SHA before updating;
 - redeploy previous image tags through the same Compose mechanism;
 - rerun smoke checks.
 
 Database rollback:
+
 - do not assume automatic rollback after migrations;
 - keep fresh backups before risky migrations;
 - document whether each migration is backward-compatible;
@@ -478,10 +516,12 @@ Database rollback:
 Goal: add GitHub Actions CI for backend and frontend.
 
 Likely files:
+
 - `.github/workflows/ci.yml`
 - optionally package scripts if small command aliases help
 
 Implement:
+
 - install pnpm consistently;
 - cache pnpm dependencies where appropriate;
 - run backend typecheck, lint, tests, and build;
@@ -490,6 +530,7 @@ Implement:
   as required PR CI initially.
 
 Acceptance criteria:
+
 - PR CI is green;
 - CI runs automatically on pull requests;
 - CI runs automatically on pushes to `main` and `master`;
@@ -510,6 +551,7 @@ pnpm web:build
 ```
 
 Risks / things to verify:
+
 - Testcontainers integration tests require Docker on GitHub runners.
 - Frontend and backend have separate lockfiles.
 - CI cache should not hide lockfile drift.
@@ -520,12 +562,14 @@ Goal: ensure deployable production images exist for backend, migrator, and
 frontend/static assets.
 
 Likely files:
+
 - `Dockerfile`
 - `web/Dockerfile` or equivalent frontend build packaging
 - `.dockerignore`
 - possibly `docker/nginx/*`
 
 Implement:
+
 - confirm backend runtime image contains only production runtime requirements;
 - confirm backend migrator can run Drizzle migrations and partition maintenance;
 - add frontend production build strategy;
@@ -534,6 +578,7 @@ Implement:
 - ensure images do not require source mounts.
 
 Acceptance criteria:
+
 - backend image builds locally;
 - migrator image/stage builds locally;
 - frontend production artifact/image builds locally;
@@ -550,6 +595,7 @@ pnpm web:build
 ```
 
 Risks / things to verify:
+
 - The current `.dockerignore` excludes docs and env files; keep secrets out.
 - The migrator currently uses dev dependencies from the deps stage; verify this
   is acceptable or create a cleaner migrator image.
@@ -563,12 +609,14 @@ Risks / things to verify:
 Goal: add a VM-oriented Compose stack.
 
 Likely files:
+
 - `docker-compose.prod.yml`
 - `.env.production.example`
 - possibly `docker/prometheus/prometheus.prod.yml`
 - possibly `docs/deployment-ci-cd-progress.md` if the tracker is split later
 
 Implement:
+
 - split backend into `api`, `ingestion`, and `worker`;
 - add `migrate` one-shot service;
 - add Postgres/PostGIS with persistent volume;
@@ -583,6 +631,7 @@ Implement:
 - keep local development Compose untouched unless needed.
 
 Acceptance criteria:
+
 - production Compose stack can run locally or in a VM-like environment;
 - public-facing service is only Nginx once Phase 4 is complete;
 - this Compose file is not publicly complete until Phase 4 adds the public
@@ -600,6 +649,7 @@ docker compose --env-file .env.production.example -f docker-compose.prod.yml ps
 ```
 
 Risks / things to verify:
+
 - Role split changes stream consumer behavior and should be tested with live or
   fixture data.
 - If multiple roles expose `/metrics`, decide whether Prometheus scrapes all
@@ -615,11 +665,13 @@ Risks / things to verify:
 Goal: expose frontend, REST API, and WebSocket through one HTTP entrypoint.
 
 Likely files:
+
 - `docker/nginx/nginx.conf`
 - `docker/nginx/conf.d/default.conf`
 - `docker-compose.prod.yml`
 
 Implement:
+
 - serve frontend at `/`;
 - proxy `/api` to the API container;
 - proxy `/ws/positions` to the API container;
@@ -632,6 +684,7 @@ Implement:
 - do not configure HTTPS yet.
 
 Acceptance criteria:
+
 - `http://<host>/` serves the frontend;
 - `http://<host>/api/vessels` reaches the API;
 - `ws://<host>/ws/positions` works;
@@ -650,6 +703,7 @@ curl -i http://localhost/admin
 ```
 
 Risks / things to verify:
+
 - Nginx path rewriting for `/api` must preserve the backend's expected routes.
 - WebSocket proxy headers and timeouts must be correct.
 - Frontend asset fallback should support client-side routing if added later.
@@ -661,11 +715,13 @@ Risks / things to verify:
 Goal: document and optionally script the first reproducible GCP setup.
 
 Likely files:
-- `docs/gcp-vm-runbook.md`
+
+- `docs/operations/gcp-vm-runbook.md`
 - `scripts/deploy/`
 - `scripts/vm/`
 
 Implement/document:
+
 - create or select GCP project;
 - enable required APIs;
 - create Artifact Registry Docker repository;
@@ -682,6 +738,7 @@ Implement/document:
 - document private Grafana access through SSH tunnel or restricted equivalent.
 
 Acceptance criteria:
+
 - a fresh VM can be prepared by following the runbook;
 - VM can pull images from Artifact Registry;
 - only intended public ports are reachable;
@@ -697,6 +754,7 @@ docker compose version
 ```
 
 Risks / things to verify:
+
 - Region/zone choice affects cost and latency.
 - Firewall rules must not accidentally expose DB/Redis.
 - SSH access should remain recoverable while still being restricted.
@@ -709,12 +767,14 @@ Risks / things to verify:
 Goal: add approved deployment from GitHub Actions to the VM.
 
 Likely files:
+
 - `.github/workflows/deploy.yml`
 - `scripts/deploy/deploy.sh`
 - `scripts/deploy/smoke-check.sh`
 - `docker-compose.prod.yml`
 
 Implement:
+
 - build and push SHA-tagged images to Artifact Registry;
 - require GitHub Environment approval before deployment;
 - connect to VM through restricted-source SSH initially, or IAP if already set
@@ -728,6 +788,7 @@ Implement:
 - fail loudly on unsuccessful migration or smoke check.
 
 Acceptance criteria:
+
 - approved deployment updates the VM to an exact image tag;
 - migration runs before app restart;
 - failed migration stops deployment;
@@ -745,6 +806,7 @@ curl -kfsS https://localhost/readyz
 ```
 
 Risks / things to verify:
+
 - GitHub OIDC setup can be fiddly but is worth it.
 - SSH from GitHub runner to VM may require IAP or carefully scoped firewall
   rules.
@@ -755,12 +817,14 @@ Risks / things to verify:
 Goal: make the deployment operable, not just runnable.
 
 Likely files:
+
 - `scripts/backup/postgres-backup.sh`
 - `scripts/backup/redis-backup.sh`
-- `docs/operations-runbook.md`
-- `docs/restore-drill.md`
+- `docs/operations/operations-runbook.md`
+- `docs/operations/restore-drill.md`
 
 Implement:
+
 - Postgres backup script using `pg_dump` or `pg_dumpall` as appropriate;
 - Redis backup notes/scripts for AOF/RDB data;
 - optional upload to private GCS bucket;
@@ -774,6 +838,7 @@ Implement:
 - backup privacy requirements.
 
 Acceptance criteria:
+
 - backup procedure is documented and manually testable;
 - restore procedure is documented;
 - operator can inspect logs, health, disk usage, and container status;
@@ -790,6 +855,7 @@ df -h
 ```
 
 Risks / things to verify:
+
 - Backups must be encrypted or kept in private storage.
 - Redis recovery expectations should be documented honestly.
 - Restore drills are the only proof that backups are usable.
@@ -799,14 +865,16 @@ Risks / things to verify:
 Goal: move from static-IP HTTP to domain-based HTTPS.
 
 Likely files:
+
 - `web/nginx.conf`
 - `web/docker-entrypoint.d/*`
 - `docker-compose.prod.yml`
-- `docs/https-domain-runbook.md`
-- `docs/gcp-vm-runbook.md`
-- `docs/operations-runbook.md`
+- `docs/operations/https-domain-runbook.md`
+- `docs/operations/gcp-vm-runbook.md`
+- `docs/operations/operations-runbook.md`
 
 Implement:
+
 - register or configure a domain;
 - create DNS A record pointing to the reserved static IP;
 - update Nginx `server_name`;
@@ -818,6 +886,7 @@ Implement:
 - consider HSTS after the setup is stable.
 
 Acceptance criteria:
+
 - frontend works at `https://<domain>`;
 - REST API works at `https://<domain>/api`;
 - WebSocket works at `wss://<domain>/ws/positions`;
@@ -832,6 +901,7 @@ curl -fsS https://<domain>/api/vessels?limit=1
 ```
 
 Risks / things to verify:
+
 - Certbot container/file permissions with Nginx volumes.
 - Renewal must reload Nginx safely.
 - DNS propagation can make initial verification flaky.

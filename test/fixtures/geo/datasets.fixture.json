@@ -8,7 +8,7 @@
       "region": "Black Sea fixture",
       "sourceLayer": "land",
       "targetTable": "geo_land_polygons",
-      "path": "scripts/geo/fixtures/land.geojson",
+      "path": "test/fixtures/geo/land.geojson",
       "license": "Repository fixture; production land baseline is expected to use OSM-derived OSMData land polygons.",
       "attribution": "AIS Tracking System fixture geometry",
       "pinnedVersion": "2026-05-23-phase8-inland-water-fixture"
@@ -19,7 +19,7 @@
       "region": "Black Sea fixture",
       "sourceLayer": "navigable_water",
       "targetTable": "geo_navigable_water_polygons",
-      "path": "scripts/geo/fixtures/navigable-water.geojson",
+      "path": "test/fixtures/geo/navigable-water.geojson",
       "license": "Repository fixture; production inland water is expected to use OSM/Geofabrik-derived data plus manual overrides.",
       "attribution": "AIS Tracking System fixture geometry",
       "pinnedVersion": "2026-05-23-phase8-inland-water-fixture"
@@ -33,7 +33,7 @@
       "geometryOperation": "line_buffer",
       "includeFclasses": ["river", "canal"],
       "defaultLineBufferMeters": 150,
-      "path": "scripts/geo/fixtures/geofabrik-waterways.geojson",
+      "path": "test/fixtures/geo/geofabrik-waterways.geojson",
       "license": "Repository fixture; production inland water is expected to use OSM/Geofabrik-derived data plus manual overrides.",
       "attribution": "AIS Tracking System fixture geometry",
       "pinnedVersion": "2026-05-23-phase8-inland-water-fixture"

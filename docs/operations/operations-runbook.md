@@ -2,16 +2,16 @@
 
 This runbook covers day-two operation for the AIS Tracking System deployment:
 one GCP Compute Engine VM running Docker Compose. Domain and certificate
-operations are covered in `docs/https-domain-runbook.md`.
+operations are covered in `docs/operations/https-domain-runbook.md`.
 
 It intentionally does not cover Terraform, Cloud SQL, Memorystore, GKE, or
 Cloud Run.
 
 Related runbooks:
 
-- GCP VM setup: `docs/gcp-vm-runbook.md`
-- HTTPS/domain/TLS: `docs/https-domain-runbook.md`
-- Restore drills: `docs/restore-drill.md`
+- GCP VM setup: `docs/operations/gcp-vm-runbook.md`
+- HTTPS/domain/TLS: `docs/operations/https-domain-runbook.md`
+- Restore drills: `docs/operations/restore-drill.md`
 
 ## Deployment State
 
@@ -183,7 +183,7 @@ AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/rollback.sh --app-dir /opt/ais-tr
 ```
 
 If a migration was not backward-compatible, rollback may require a database
-restore or a corrective migration. Read `docs/restore-drill.md` before doing
+restore or a corrective migration. Read `docs/operations/restore-drill.md` before doing
 that on production data.
 
 ## GeoValidation Rollout
@@ -359,9 +359,17 @@ section. During geo rollout and tuning, watch:
 
 ## Manual Sanctions And DLQ Notes
 
-No production sanctions import workflow is automated in this phase. If manual
-sanctions data is added later, keep the source file private and document the
-exact import command used.
+Sanctions imports can be inspected and manually enqueued through the admin API
+when `ADMIN_TOKEN` is configured:
+
+- `GET /admin/sanctions/imports`
+- `POST /admin/sanctions/imports/ofac/run`
+
+DLQ and stream state can also be inspected through admin routes:
+
+- `GET /admin/streams`
+- `GET /admin/deadletter`
+- `POST /admin/deadletter/:id/replay`
 
 For ingestion or enrichment failures, start with:
 
@@ -369,6 +377,3 @@ For ingestion or enrichment failures, start with:
 docker compose --env-file .env.production --env-file .env.release -f docker-compose.prod.yml -f docker-compose.prod.grafana-local.yml logs --tail=300 ingestion
 docker compose --env-file .env.production --env-file .env.release -f docker-compose.prod.yml -f docker-compose.prod.grafana-local.yml logs --tail=300 worker
 ```
-
-If a Redis-backed DLQ is added later, document the exact Redis keys and safe
-inspection commands here before using them in production.

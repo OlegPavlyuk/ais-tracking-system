@@ -1,12 +1,28 @@
+# Archived Document
+
+Status: Historical geo-validation production rollout plan.
+
+This document is preserved for historical context and decision history. It is
+not considered a canonical source of truth for the current production rollout.
+
+Refer to the active documentation in:
+
+- `README.md`
+- `docs/architecture/architecture.md`
+- `docs/operations/operations-runbook.md`
+- `docs/operations/restore-drill.md`
+
+---
+
 # Geo Validation Production Rollout Plan
 
 This document captures the production rollout plan for the PostGIS-backed
 GeoValidation runtime and GeoImport workflow.
 
 It is intentionally operational and deployment-focused. The durable feature
-architecture remains in `docs/geo-validation-implementation-plan.md`; this
-document explains how to deploy it safely on the current GCP VM Docker Compose
-production stack.
+architecture remains in `docs/archive/geo-validation-implementation-plan.md`;
+this document explains how to deploy it safely on the current GCP VM Docker
+Compose production stack.
 
 ## Current Production Deployment Model
 
@@ -73,7 +89,7 @@ Already implemented:
 - `pnpm geo:import` local import script.
 - `pnpm geo:tune` probe validation script.
 - Production-like manifest in `scripts/geo/datasets.json`.
-- Fixture manifest in `scripts/geo/datasets.fixture.json`.
+- Fixture manifest in `test/fixtures/geo/datasets.fixture.json`.
 - Inland water support through Geofabrik-style layer selection and buffered
   `waterways` line import.
 

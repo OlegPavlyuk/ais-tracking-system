@@ -2,7 +2,8 @@ import postgres, { Sql } from 'postgres';
 import { runGeoImport } from '../../../scripts/geo/import-geo-datasets';
 import { assertIntegrationDatabase } from '../setup/testcontainers-postgres';
 
-const FIXTURE_DATASETS_PATH = 'scripts/geo/datasets.fixture.json';
+const FIXTURE_DATASETS_PATH = 'test/fixtures/geo/datasets.fixture.json';
+const FIXTURE_MANUAL_OVERRIDES_DIR = 'test/fixtures/geo/manual-overrides';
 
 interface ActiveVersionRow {
   id: string;
@@ -108,6 +109,7 @@ describe('geo dataset import tooling', () => {
     await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
       datasetsPath: FIXTURE_DATASETS_PATH,
+      manualOverridesDir: FIXTURE_MANUAL_OVERRIDES_DIR,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -147,6 +149,7 @@ describe('geo dataset import tooling', () => {
     const firstVersion = await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
       datasetsPath: FIXTURE_DATASETS_PATH,
+      manualOverridesDir: FIXTURE_MANUAL_OVERRIDES_DIR,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -155,6 +158,7 @@ describe('geo dataset import tooling', () => {
     const secondVersion = await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
       datasetsPath: FIXTURE_DATASETS_PATH,
+      manualOverridesDir: FIXTURE_MANUAL_OVERRIDES_DIR,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -176,6 +180,7 @@ describe('geo dataset import tooling', () => {
     const firstVersion = await runGeoImport({
       databaseUrl: process.env.DATABASE_URL,
       datasetsPath: FIXTURE_DATASETS_PATH,
+      manualOverridesDir: FIXTURE_MANUAL_OVERRIDES_DIR,
       useOgr2ogr: false,
       workDir: '.geo-import-test',
     });
@@ -185,6 +190,7 @@ describe('geo dataset import tooling', () => {
       runGeoImport({
         databaseUrl: process.env.DATABASE_URL,
         datasetsPath: FIXTURE_DATASETS_PATH,
+        manualOverridesDir: FIXTURE_MANUAL_OVERRIDES_DIR,
         useOgr2ogr: false,
         workDir: '.geo-import-test',
         failAfterLoad: true,

@@ -9,25 +9,25 @@ The frontend exposes lightweight browser-side diagnostics to establish a runtime
 Open the browser console and inspect the metrics object:
 
 ```js
-globalThis.__AIS_FRONTEND_METRICS__
+globalThis.__AIS_FRONTEND_METRICS__;
 ```
 
 Realtime metrics:
 
 ```js
-globalThis.__AIS_FRONTEND_METRICS__.realtime
+globalThis.__AIS_FRONTEND_METRICS__.realtime;
 ```
 
 Map update metrics:
 
 ```js
-globalThis.__AIS_FRONTEND_METRICS__.vesselSourceUpdates
+globalThis.__AIS_FRONTEND_METRICS__.vesselSourceUpdates;
 ```
 
 Reset metrics for a fresh measurement window:
 
 ```js
-globalThis.__AIS_FRONTEND_METRICS__.reset()
+globalThis.__AIS_FRONTEND_METRICS__.reset();
 ```
 
 ## Typical Workflow
@@ -37,14 +37,14 @@ globalThis.__AIS_FRONTEND_METRICS__.reset()
 3. Reset metrics:
 
 ```js
-globalThis.__AIS_FRONTEND_METRICS__.reset()
+globalThis.__AIS_FRONTEND_METRICS__.reset();
 ```
 
 4. Use the application for a few minutes, ideally in the scenario being investigated.
 5. Inspect metrics:
 
 ```js
-globalThis.__AIS_FRONTEND_METRICS__
+globalThis.__AIS_FRONTEND_METRICS__;
 ```
 
 6. Compare the most important fields: `avgBuildDurationMs`, `avgSetDataDurationMs`, `maxBuildDurationMs`, `maxSetDataDurationMs`, `maxVesselCount`, and `maxFeatureCount`.
