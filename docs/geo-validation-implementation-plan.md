@@ -1041,7 +1041,7 @@ committing.
   installed in the local runtime. The normal application Docker runtime still
   has no GDAL dependency.
 - Phase 3 intentionally pins tiny repo-owned fixture GeoJSON datasets in
-  `scripts/geo/datasets.fixture.json` to validate import lifecycle behavior before
+  `test/fixtures/geo/datasets.fixture.json` to validate import lifecycle behavior before
   large OSMData/Geofabrik imports are introduced during real data tuning.
 - Phase 4 keeps pipeline decisions for Phase 5 but returns `shouldDrop` from
   `GeoValidationService` so `reject/deep_land` and fail-closed
@@ -1082,7 +1082,7 @@ committing.
 - Phase 8 adds `geometryOperation: "line_buffer"` to the geo import manifest.
   The operation keeps feature properties in staging, filters selected
   Geofabrik-style `fclass` values, clips by `AIS_COVERAGE_ZONES +
-  GEO_COVERAGE_MARGIN_KM`, buffers line geometries as geography meters, then
+GEO_COVERAGE_MARGIN_KM`, buffers line geometries as geography meters, then
   subdivides and loads them into `geo_navigable_water_polygons`. Runtime remains
   unchanged and continues to query only polygon tables.
 - Phase 8 line buffering uses a conservative default of 75 meters when the
@@ -1116,11 +1116,11 @@ committing.
   container runtime strategy.
 - Phase 8 promotes `scripts/geo/datasets.json` to the initial production-like
   manifest and moves deterministic local fixtures to
-  `scripts/geo/datasets.fixture.json`. The production-like manifest downloads
+  `test/fixtures/geo/datasets.fixture.json`. The production-like manifest downloads
   OSMData land polygons for land rejection, OSMData water polygons for
   sea/coastal/open-water allow coverage, and selected Geofabrik free
   `.gpkg.zip` extracts for Rhine river/canal coverage. Fixture integration tests
-  now pass `datasetsPath: "scripts/geo/datasets.fixture.json"` explicitly so
+  now pass `datasetsPath: "test/fixtures/geo/datasets.fixture.json"` explicitly so
   normal test runs do not download large external datasets.
 - Local and remote GDAL smoke tests verified `/vsizip/` access for OSMData
   nested Shapefiles and Geofabrik zipped GeoPackages. Remote `ogrinfo` checks

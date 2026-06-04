@@ -4,7 +4,16 @@ import { AISSTREAM_ACCEPTED_MESSAGE_TYPES } from './aisstream.message-types';
 import { AisStreamRawFilter } from './aisstream.raw-filter';
 
 function loadFixture(): unknown[] {
-  const path = join(__dirname, '..', '..', '..', 'aisstream', 'raw-api-response.jsonl');
+  const path = join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    'test',
+    'fixtures',
+    'aisstream',
+    'raw-api-response.jsonl',
+  );
   return readFileSync(path, 'utf8')
     .trim()
     .split('\n')
@@ -109,7 +118,9 @@ describe('AisStreamRawFilter', () => {
     const accepted = fixture.filter((m) => filter.accept(m).accepted);
     for (const m of accepted) {
       const mt = (m as { MessageType?: string }).MessageType;
-      expect(AISSTREAM_ACCEPTED_MESSAGE_TYPES).toContain(mt as (typeof AISSTREAM_ACCEPTED_MESSAGE_TYPES)[number]);
+      expect(AISSTREAM_ACCEPTED_MESSAGE_TYPES).toContain(
+        mt as (typeof AISSTREAM_ACCEPTED_MESSAGE_TYPES)[number],
+      );
       const mmsi = String((m as { MetaData?: { MMSI?: number } }).MetaData?.MMSI ?? '');
       expect(mmsi).toMatch(/^\d{9}$/);
     }

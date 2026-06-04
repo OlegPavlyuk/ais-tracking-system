@@ -2,7 +2,7 @@ import postgres, { Sql } from 'postgres';
 import { runGeoImport } from '../../../scripts/geo/import-geo-datasets';
 import { assertIntegrationDatabase } from '../setup/testcontainers-postgres';
 
-const FIXTURE_DATASETS_PATH = 'scripts/geo/datasets.fixture.json';
+const FIXTURE_DATASETS_PATH = 'test/fixtures/geo/datasets.fixture.json';
 
 interface ActiveVersionRow {
   id: string;

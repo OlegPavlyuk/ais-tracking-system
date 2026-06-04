@@ -73,7 +73,7 @@ Already implemented:
 - `pnpm geo:import` local import script.
 - `pnpm geo:tune` probe validation script.
 - Production-like manifest in `scripts/geo/datasets.json`.
-- Fixture manifest in `scripts/geo/datasets.fixture.json`.
+- Fixture manifest in `test/fixtures/geo/datasets.fixture.json`.
 - Inland water support through Geofabrik-style layer selection and buffered
   `waterways` line import.
 

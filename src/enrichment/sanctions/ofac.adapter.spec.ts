@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { OfacAdapter } from './ofac.adapter';
 import { VesselEntity } from './sanctions-source.adapter';
 
-const FIXTURE_PATH = resolve(__dirname, '../../../docs/fixtures/ofac-sdn-sample.xml');
+const FIXTURE_PATH = resolve(__dirname, '../../../test/fixtures/sanctions/ofac-sdn-sample.xml');
 
 async function collect(adapter: OfacAdapter): Promise<VesselEntity[]> {
   const out: VesselEntity[] = [];
