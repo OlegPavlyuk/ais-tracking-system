@@ -168,7 +168,7 @@ REDIS_VOLUME="$(sudo docker inspect --format '{{range .Mounts}}{{if eq .Destinat
 ```
 
 3. Restore the archive into the selected Redis volume in a disposable
-environment.
+   environment.
 
 ```bash
 REDIS_BACKUP_BASENAME="$(basename "$REDIS_BACKUP")"

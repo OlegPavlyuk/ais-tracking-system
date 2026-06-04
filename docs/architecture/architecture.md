@@ -6,12 +6,44 @@ This document contains the deeper architecture detail intentionally kept out of 
 
 The backend is a modular NestJS application that can run as a single local process or as role-based containers from the same image:
 
-| Role | Modules |
-| --- | --- |
-| `all` | API, admin, ingestion, pipeline, storage, enrichment, realtime |
-| `api` | REST API, admin controllers, health/readiness, WebSocket gateway |
-| `ingestion` | provider ingestion, normalization pipeline, storage writer |
-| `worker` | sanctions import, vessel enrichment, reconciliation jobs |
+| Role        | Active modules                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| `all`       | API, admin, ingestion, pipeline, storage writer, enrichment, realtime                                     |
+| `api`       | REST API, admin controllers, health/readiness, realtime gateway and fanout consumers                      |
+| `ingestion` | provider ingestion, normalization pipeline, geo validation, storage writer, history partition maintenance |
+| `worker`    | sanctions import, vessel enrichment requester/processor, persisted-event consumer, reconciliation jobs    |
+
+Shared infrastructure modules for config, logging, metrics, DB, Redis, event bus, queues, and health are loaded for every role. API/admin routes import storage and sanctions repositories for reads/admin commands, but the storage writer runs only in `all` and `ingestion`; enrichment workers run only in `all` and `worker`.
+
+## Architecture Principles
+
+- Keep the backend as a modular monolith until operational pressure justifies distribution.
+- Use event-driven internal boundaries where storage, realtime, and enrichment need isolation.
+- Treat enrichment as asynchronous derived state, not part of the ingestion write path.
+- Use PostGIS as the system of record for vessel identity, latest state, history, and sanctions results.
+- Prefer operational simplicity before adding distributed-system complexity.
+
+## Deployment Topology
+
+The current production topology runs on a single VM with Docker Compose. Nginx is the public entrypoint and serves the frontend while proxying API and WebSocket traffic to the API role. API, ingestion, and worker containers are created from the same backend image and select behavior through `PROCESS_ROLE`.
+
+```mermaid
+flowchart TD
+  User["Browser"] --> Nginx["Nginx<br/>frontend + HTTPS entrypoint"]
+  Nginx --> Api["Backend image<br/>PROCESS_ROLE=api"]
+  Ingestion["Backend image<br/>PROCESS_ROLE=ingestion"] --> Redis[("Redis<br/>streams + queues")]
+  Api --> Redis
+  Worker["Backend image<br/>PROCESS_ROLE=worker"] --> Redis
+  Ingestion --> Postgres[("PostgreSQL + PostGIS")]
+  Api --> Postgres
+  Worker --> Postgres
+  Prometheus["Prometheus"] --> Api
+  Prometheus --> Ingestion
+  Prometheus --> Worker
+  Grafana["Grafana"] --> Prometheus
+```
+
+One-shot migration and geo-import containers run alongside this topology when needed. Deployment and recovery procedures are covered in the operations runbooks.
 
 ## Detailed Event Flow
 
@@ -71,19 +103,13 @@ After a position or static event is persisted, `StorageWriterConsumer` publishes
 
 ## Realtime Delivery
 
-The frontend loads an initial snapshot from `GET /api/vessels`, then subscribes to `WS /ws/positions`.
+The frontend loads an initial snapshot from `GET /api/vessels`, then subscribes to `WS /ws/positions`. The realtime fanout consumers read canonical AIS events and enrichment results from Redis Streams and send them through bounded WebSocket queues.
 
-Each WebSocket connection has a bounded queue:
-
-- position events are coalesced by MMSI;
-- static and enrichment messages are preserved;
-- clients that cannot drain fast enough are disconnected.
-
-This keeps realtime fanout predictable under bursty AIS traffic.
+See [realtime.md](realtime.md) for client protocol, queue behavior, and fanout details.
 
 ## Enrichment Workflow
 
-Sanctions data is imported locally rather than queried per vessel at runtime.
+Sanctions data is imported locally rather than queried per vessel at runtime. Persisted vessel facts trigger asynchronous enrichment jobs, and completed checks update Postgres before publishing `vessel.enriched` for realtime clients.
 
 ```mermaid
 flowchart TD
@@ -99,15 +125,13 @@ flowchart TD
   Matcher --> Event[("vessel.enriched")]
 ```
 
-The enrichment requester owns enqueue decisions using profile hashes and checked-cache entries. Jobs use deterministic IDs, and database updates use freshness guards so replayed or delayed jobs do not overwrite newer checks.
+See [sanctions-enrichment.md](sanctions-enrichment.md) for source handling, matching rules, job idempotency, and recovery behavior.
 
 ## Geo Validation
 
-The ingestion pipeline can validate positions against imported PostGIS land/water datasets before publishing downstream events.
+Geo validation is an optional ingestion-stage guard that can reject impossible or low-quality vessel positions before they reach the shared event stream. It runs after provider/bbox filtering and before sampling and publishing to `ais.events.v1`.
 
-- Configurable fail-open/fail-closed behavior supports safe rollout.
-- Redis caching reduces repeated validation cost.
-- Metrics expose validation verdicts, sources, cache behavior, and active dataset version.
+See [geo-validation.md](geo-validation.md) for dataset handling, caching, rollout modes, metrics, and operational details.
 
 ## Observability
 

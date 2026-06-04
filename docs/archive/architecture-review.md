@@ -8,9 +8,9 @@ not considered a canonical source of truth for the current system.
 Refer to the active documentation in:
 
 - `README.md`
-- `docs/architecture.md`
-- `docs/architecture-decisions.md`
-- `docs/operations-runbook.md`
+- `docs/architecture/architecture.md`
+- `docs/architecture/architecture-decisions.md`
+- `docs/operations/operations-runbook.md`
 
 ---
 

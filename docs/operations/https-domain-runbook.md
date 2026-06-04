@@ -16,8 +16,7 @@ private.
 
 Use Let's Encrypt certificates issued by Certbot with HTTP-01 validation.
 Nginx serves the ACME challenge webroot on port 80, redirects normal HTTP
-traffic to HTTPS, and proxies frontend, REST API, and WebSocket traffic on port
-443.
+traffic to HTTPS, and proxies frontend, REST API, and WebSocket traffic on port 443.
 
 Tradeoffs considered:
 

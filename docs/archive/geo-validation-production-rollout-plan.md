@@ -8,9 +8,9 @@ not considered a canonical source of truth for the current production rollout.
 Refer to the active documentation in:
 
 - `README.md`
-- `docs/architecture.md`
-- `docs/operations-runbook.md`
-- `docs/restore-drill.md`
+- `docs/architecture/architecture.md`
+- `docs/operations/operations-runbook.md`
+- `docs/operations/restore-drill.md`
 
 ---
 

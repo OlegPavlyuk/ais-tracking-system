@@ -24,13 +24,13 @@ Redis, Nginx, Prometheus, and private Grafana.
 
 This phase does not create Cloud SQL, Memorystore, Cloud Run, or public
 Prometheus/Grafana access. Domain and HTTPS setup is covered in
-`docs/https-domain-runbook.md`.
+`docs/operations/https-domain-runbook.md`.
 
 Related runbooks:
 
-- Day-two operations: `docs/operations-runbook.md`
-- HTTPS/domain/TLS: `docs/https-domain-runbook.md`
-- Restore drills: `docs/restore-drill.md`
+- Day-two operations: `docs/operations/operations-runbook.md`
+- HTTPS/domain/TLS: `docs/operations/https-domain-runbook.md`
+- Restore drills: `docs/operations/restore-drill.md`
 
 ## Recommended Starting Values
 
@@ -294,7 +294,7 @@ Console path:
 10. Network interface external IPv4 address: choose the reserved static IP.
 11. Service account: choose `ais-vm-runner`.
 12. Access scopes: **Allow default access** is enough when IAM is granted on the
-   service account.
+    service account.
 13. Click **Create**.
 
 `gcloud`:

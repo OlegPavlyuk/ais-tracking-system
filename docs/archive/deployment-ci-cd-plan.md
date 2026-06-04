@@ -8,10 +8,10 @@ not considered a canonical source of truth for the current deployment.
 Refer to the active documentation in:
 
 - `README.md`
-- `docs/gcp-vm-runbook.md`
-- `docs/https-domain-runbook.md`
-- `docs/operations-runbook.md`
-- `docs/restore-drill.md`
+- `docs/operations/gcp-vm-runbook.md`
+- `docs/operations/https-domain-runbook.md`
+- `docs/operations/operations-runbook.md`
+- `docs/operations/restore-drill.md`
 
 ---
 
@@ -716,7 +716,7 @@ Goal: document and optionally script the first reproducible GCP setup.
 
 Likely files:
 
-- `docs/gcp-vm-runbook.md`
+- `docs/operations/gcp-vm-runbook.md`
 - `scripts/deploy/`
 - `scripts/vm/`
 
@@ -820,8 +820,8 @@ Likely files:
 
 - `scripts/backup/postgres-backup.sh`
 - `scripts/backup/redis-backup.sh`
-- `docs/operations-runbook.md`
-- `docs/restore-drill.md`
+- `docs/operations/operations-runbook.md`
+- `docs/operations/restore-drill.md`
 
 Implement:
 
@@ -869,9 +869,9 @@ Likely files:
 - `web/nginx.conf`
 - `web/docker-entrypoint.d/*`
 - `docker-compose.prod.yml`
-- `docs/https-domain-runbook.md`
-- `docs/gcp-vm-runbook.md`
-- `docs/operations-runbook.md`
+- `docs/operations/https-domain-runbook.md`
+- `docs/operations/gcp-vm-runbook.md`
+- `docs/operations/operations-runbook.md`
 
 Implement:
 

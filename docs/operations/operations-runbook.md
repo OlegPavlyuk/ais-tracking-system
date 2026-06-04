@@ -2,16 +2,16 @@
 
 This runbook covers day-two operation for the AIS Tracking System deployment:
 one GCP Compute Engine VM running Docker Compose. Domain and certificate
-operations are covered in `docs/https-domain-runbook.md`.
+operations are covered in `docs/operations/https-domain-runbook.md`.
 
 It intentionally does not cover Terraform, Cloud SQL, Memorystore, GKE, or
 Cloud Run.
 
 Related runbooks:
 
-- GCP VM setup: `docs/gcp-vm-runbook.md`
-- HTTPS/domain/TLS: `docs/https-domain-runbook.md`
-- Restore drills: `docs/restore-drill.md`
+- GCP VM setup: `docs/operations/gcp-vm-runbook.md`
+- HTTPS/domain/TLS: `docs/operations/https-domain-runbook.md`
+- Restore drills: `docs/operations/restore-drill.md`
 
 ## Deployment State
 
@@ -183,7 +183,7 @@ AIS_DEPLOY_USE_SUDO_DOCKER=true scripts/deploy/rollback.sh --app-dir /opt/ais-tr
 ```
 
 If a migration was not backward-compatible, rollback may require a database
-restore or a corrective migration. Read `docs/restore-drill.md` before doing
+restore or a corrective migration. Read `docs/operations/restore-drill.md` before doing
 that on production data.
 
 ## GeoValidation Rollout

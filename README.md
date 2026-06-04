@@ -8,9 +8,11 @@
 ![Redis Streams](https://img.shields.io/badge/Redis-Streams-DC382D)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
 
-Production-oriented AIS vessel tracking backend for realtime ingestion, event-driven processing, geospatial querying, sanctions enrichment, and operational observability.
+Production-style AIS vessel tracking backend for realtime ingestion, event-driven processing, geospatial querying, sanctions enrichment, and operational observability.
 
 The system ingests live AIS traffic, normalizes provider-specific messages into canonical events, persists current and historical vessel state in PostGIS, enriches vessels against sanctions data, and streams realtime updates to a MapLibre web client.
+
+**Live Demo:** [aiswatch.live](https://aiswatch.live)
 
 ## Motivation
 
@@ -32,7 +34,7 @@ The focus is intentionally backend and system design. The map UI is a useful cli
 ## System Characteristics
 
 - Coverage area: configured Mediterranean and Black Sea AIS zones, including the Black Sea, Levant/East Mediterranean, Central/East Mediterranean, and West Mediterranean/Europe.
-- Current production ingestion averages roughly `25-30 msg/s`; throughput is expected to grow as coverage expands and additional AIS providers are added.
+- Live AIS ingestion is built around stream-backed processing, role-based workers, and provider boundaries that can support broader coverage and additional AIS providers as workload grows.
 - Redis Streams event backbone with consumer groups for storage, realtime fanout, and enrichment handoff.
 - PostGIS-backed latest-state queries plus append-only, daily partitioned vessel history.
 - WebSocket realtime updates with per-client bounded queues and position coalescing.
@@ -41,7 +43,7 @@ The focus is intentionally backend and system design. The map UI is a useful cli
 
 ## Architecture
 
-The README diagram shows the system shape only. Detailed stream, DLQ, enrichment, and operational flows live in [docs/architecture.md](docs/architecture.md).
+The README diagram shows the system shape only. Detailed stream, DLQ, enrichment, and operational flows live in [docs/architecture/architecture.md](docs/architecture/architecture.md).
 
 ```mermaid
 flowchart TD
@@ -185,7 +187,7 @@ src/
   enrichment/  sanctions ETL and vessel enrichment workers
   shared/      config, Redis, event bus, DB, metrics, logs, health
 web/           React + MapLibre realtime client
-docs/          architecture, deployment, operations, restore notes
+docs/          indexed architecture, development, operations, and frontend notes
 ```
 
 ## Future Improvements
@@ -194,14 +196,15 @@ docs/          architecture, deployment, operations, restore notes
 - Replace best-effort post-commit enrichment handoff with a transactional outbox if lossless derived-event delivery becomes required.
 - Add OpenAPI generation and typed API client publishing.
 - Add public API auth, rate limiting, and tenant-aware access controls.
-- Move from single-VM Docker Compose to Kubernetes or managed container orchestration when horizontal scaling justifies the operational cost.
+- Evaluate scaling options for ingestion, storage consumers, and realtime fanout when workload growth justifies additional operational complexity.
 - Extend sanctions sources beyond OFAC and add reviewer workflows for name-only candidate matches.
 
 ## Further Reading
 
-- [`docs/architecture.md`](docs/architecture.md)
-- [`docs/architecture-decisions.md`](docs/architecture-decisions.md)
-- [`docs/operations-runbook.md`](docs/operations-runbook.md)
-- [`docs/gcp-vm-runbook.md`](docs/gcp-vm-runbook.md)
-- [`docs/https-domain-runbook.md`](docs/https-domain-runbook.md)
-- [`docs/restore-drill.md`](docs/restore-drill.md)
+- [`docs/index.md`](docs/index.md)
+- [`docs/architecture/architecture.md`](docs/architecture/architecture.md)
+- [`docs/architecture/architecture-decisions.md`](docs/architecture/architecture-decisions.md)
+- [`docs/operations/operations-runbook.md`](docs/operations/operations-runbook.md)
+- [`docs/operations/gcp-vm-runbook.md`](docs/operations/gcp-vm-runbook.md)
+- [`docs/operations/https-domain-runbook.md`](docs/operations/https-domain-runbook.md)
+- [`docs/operations/restore-drill.md`](docs/operations/restore-drill.md)
