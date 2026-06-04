@@ -37,7 +37,3 @@ Deployment, infrastructure, backups, monitoring, and operational procedures.
 Frontend-specific notes and diagnostics.
 
 - [Frontend metrics](frontend/frontend-metrics.md)
-
-## Archive
-
-Historical implementation plans and reviews preserved for reference live in [archive/](archive/).
